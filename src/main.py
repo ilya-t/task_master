@@ -17,20 +17,39 @@ def current_timestamp() -> int:
     return int(time.time())
 
 
-def remove_trailing_newline(l: str) -> str:
-    if l.endswith('\n'):
-        return l[:-1]
-    return l
+def write_lines(dst: str, lines: [str]) -> None:
+    updated_content = ''.join(map(lambda l: l + '\n', lines))
+    text_file = open(dst, "w")
+    text_file.write(updated_content)
+    text_file.close()
+
+
+def read_lines(src) -> [str]:
+    def remove_trailing_newline(l: str) -> str:
+        if l.endswith('\n'):
+            return l[:-1]
+        return l
+
+    with open(src, 'r') as file:
+        return list(map(remove_trailing_newline, file.readlines()))
+
+
+def trim_trailing_empty_lines(lines: [str]):
+    while len(lines) > 0 and lines[-1].strip() == '':
+        lines.pop(-1)
 
 
 class TaskMaster:
-    def __init__(self, config_file: str, timestamp_provider: Callable[[], int] = current_timestamp) -> None:
+    def __init__(self,
+                 taskflow_file: str,
+                 history_file: str,
+                 timestamp_provider: Callable[[], int] = current_timestamp) -> None:
         super().__init__()
         self._changed = False
         self._timestamp_provider = timestamp_provider
-        self._config_file = config_file
-        with open(self._config_file, 'r') as file:
-            self._lines: [str] = list(map(remove_trailing_newline, file.readlines()))
+        self._config_file = taskflow_file
+        self._history_file = history_file
+        self._lines: [str] = read_lines(self._config_file)
 
     def _untitled_to_tasks(self) -> None:
         if self._lines[0].startswith('# '):
@@ -98,7 +117,9 @@ class TaskMaster:
                 task['check_groups'] = list(filter(lambda g: g['start'] >= task['start'] and g['start'] <= task['end'], check_groups))
 
                 tasks.append(task)
-                task = {}
+                task = {
+                    'start': i
+                }
 
         return tasks
 
@@ -177,11 +198,12 @@ class TaskMaster:
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
         self._inject_extra_checkboxes()
+        self._move_completed_tasks()
+        trim_trailing_empty_lines(self._lines)
 
         if self._changed:
-            updated_content = ''.join(map(lambda l: l+'\n', self._lines))
             self._make_defensive_copy()
-            write_to(file_name=self._config_file, content=updated_content)
+            write_lines(dst=self._config_file, lines=self._lines)
 
     def _insert(self, index: int, line: str):
         self._lines.insert(index, line)
@@ -234,6 +256,44 @@ class TaskMaster:
         check_groups.extend(nested_groups)
         return check_groups
 
+    def _move_completed_tasks(self):
+        if self._history_file == '':
+            return
+
+        tasks = self._parse_tasks()
+        completed: [str] = []
+
+        for t in sort_by_end(tasks):
+            start = t['start']
+            end = t['end']
+            task_title = self._lines[start]
+            if not task_title.startswith('# [x] '):
+                continue
+            raw_task_lines = self._lines[start:end + 1]
+            trim_trailing_empty_lines(raw_task_lines)
+            raw_task_lines.append('')
+            for l in reversed(raw_task_lines):
+                completed.insert(0, l)
+            completed[0] = completed[0].replace('# [x] ', '# ')
+
+            self._remove(start, end)
+
+        trim_trailing_empty_lines(completed)
+
+        if len(completed) == 0:
+            return
+
+        parent = os.path.dirname(self._history_file)
+        os.makedirs(parent, exist_ok=True)
+        lines = []
+        if os.path.exists(self._history_file):
+            lines = read_lines(self._history_file)
+
+        for l in reversed(completed):
+            lines.insert(0, l)
+
+        write_lines(self._history_file, lines)
+
 
 def sort_by_end(a: []) -> []:
     return sorted(a, key=lambda x: x['end'], reverse=True)
@@ -244,15 +304,9 @@ def log(message: str) -> None:
         print(message, file=log_file)
 
 
-def write_to(file_name, content):
-    text_file = open(file_name, "w")
-    text_file.write(content)
-    text_file.close()
-
-
-def main(config_file: str):
-    TaskMaster(config_file).execute()
-
-
 if __name__ == "__main__":
-    main(config_file=sys.argv[1])
+    args = sys.argv[1:]
+    if len(args) == 1:
+        args.append('')
+    TaskMaster(taskflow_file=args[0], history_file=args[1]).execute()
+
