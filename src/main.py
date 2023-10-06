@@ -13,6 +13,10 @@ DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 
 
+def get_padding(line: str) -> str:
+    return line[:line.index('- [')]
+
+
 def current_timestamp() -> int:
     return int(time.time())
 
@@ -69,35 +73,41 @@ class TaskMaster:
 
             if await_template:
                 if not line.startswith(DIVE_TEMPLATE_INTRO):
-                    self._insert(i, '```')
-                    self._insert(i, DIVE_TEMPLATE_SCRIPT_BODY)
-                    self._insert(i, '```sh')
-                    self._insert(i, DIVE_TEMPLATE_INTRO)
+                    self._insert_all(i, [
+                        DIVE_TEMPLATE_INTRO,
+                        '```sh',
+                        DIVE_TEMPLATE_SCRIPT_BODY,
+                        '```',
+                    ])
                 await_template = False
         pass
 
     def _inject_extra_checkboxes(self):
+        def group_completed_or_has_trailing_checkbox(start: int, end: int) -> bool:
+            start_line = self._lines[start]
+            group_padding = start_line[:start_line.index('- [')]
+            all_completed = True
+            if len(group_padding) > 0 and start > 0:
+                nested_group_parent_completed = self._lines[start - 1].strip().startswith('- [x]')
+                if not nested_group_parent_completed:
+                    all_completed = False
+
+            for gl in self._lines[start:end+1]:
+                if gl.startswith(group_padding + '- [ ]'):
+                    all_completed = False
+
+            return all_completed or self._lines[end].rstrip() == group_padding + '- [ ]'
+
         check_groups = self._parse_check_groups()
-        sorted_groups = sorted(check_groups, key=lambda x: x['end'], reverse=True)
 
-        def count_incomplete(s: int, e: int) -> int:
-            result = 0
-            for l in self._lines[s:e + 1]:
-                if not l.lstrip().startswith('- [x]'):
-                    result += 1
-                pass
-            return result
-
-        for group in sorted_groups:
+        for group in sort_by_end(check_groups):
             start: int = group['start']
             end: int = group['end']
-            if self._lines[end].strip() == '- [ ]':
+            if group_completed_or_has_trailing_checkbox(start, end):
                 continue
-            incomplete_tasks = count_incomplete(start, end)
-            if incomplete_tasks > 0:
-                line = self._lines[end]
-                padding = line[:line.index('- [')]
-                self._insert(end + 1, padding + '- [ ] ')
+            line = self._lines[start]
+            padding = line[:line.index('- [')]
+            self._insert(end + 1, padding + '- [ ] ')
 
     def _parse_tasks(self) -> {}:
         check_groups = self._parse_check_groups()
@@ -128,7 +138,7 @@ class TaskMaster:
             for t in tasks:
                 space_groups = []
                 check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
-
+                check_groups = list(filter(lambda cg: len(get_padding(self._lines[cg['start']])) == 0, check_groups))
                 check_group_end = None
                 for cg in check_groups:
                     cg_start = cg['start']
@@ -158,7 +168,7 @@ class TaskMaster:
         insertions = []
 
         for t in tasks:
-            space_groups = sorted(t['space_groups'], key=lambda x: x['end'], reverse=True)
+            space_groups = sort_by_end(t['space_groups'])
 
             if len(space_groups) == 0:
                 continue
@@ -168,7 +178,7 @@ class TaskMaster:
                 insertions.append({
                     'task_line': self._lines[t['start']],
                     'subtask_line': self._lines[subtask_index],
-                    'lines': self._lines[s['start']:s['end']],
+                    'lines': self._lines[s['start']:s['end']+1],
                     'start': s['start'],
                     'end': s['end'],
                 })
@@ -221,6 +231,26 @@ class TaskMaster:
         pass
 
     def _parse_check_groups(self) -> []:
+        def parse_nested_groups(start: int, end: int) -> None:
+            g = None
+            root_padding = len(get_padding(self._lines[start]))
+            last_padding = len(get_padding(self._lines[start]))
+            for i, line in enumerate(self._lines[start:end+1]):
+                new_padding = len(get_padding(line))
+                if new_padding > last_padding:
+                    if not g:
+                        g = {'start':  start + i}
+                    parse_nested_groups(start+i, end)
+                if new_padding < last_padding:
+                    if g:
+                        g['end'] = start + i - 1
+                        nested_groups.append(g)
+                    g = None
+                if new_padding < root_padding:
+                    return
+
+                last_padding = new_padding
+
         check_groups = []
         check_group = {}
         for i, line in enumerate(self._lines):
@@ -240,18 +270,7 @@ class TaskMaster:
         nested_groups = []
         for group in check_groups:
             start: int = group['start']
-            subgroup = None
-            group_lines = self._lines[start: group['end'] + 1]
-            for i, line in enumerate(group_lines):
-                if subgroup:
-                    if line.startswith('- [') or i == len(group_lines) - 1:
-                        subgroup['end'] = start + i - 1
-                        nested_groups.append(subgroup)
-                        subgroup = None
-                else:
-                    if not line.startswith('- ['):
-                        # -1 includes parent so its complete status would also count.
-                        subgroup = {'start': start + i - 1}
+            parse_nested_groups(start, group['end'])
 
         check_groups.extend(nested_groups)
         return check_groups

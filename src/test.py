@@ -21,7 +21,7 @@ def read_file(f: str) -> str:
 def get_test_cases() -> [str]:
     for root, dirs, files in os.walk(python_script_path+'/tests/cases'):
         # debug filtering
-        # dirs = list(filter(lambda d: 'moved_out' in d, dirs))
+        # dirs = list(filter(lambda d: 'no_checkboxes_autogeneration_needed' == d, dirs))
         return list(map(lambda d: (d, root+'/'+d), dirs))
 
 
