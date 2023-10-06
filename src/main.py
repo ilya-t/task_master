@@ -17,6 +17,12 @@ def current_timestamp() -> int:
     return int(time.time())
 
 
+def remove_trailing_newline(l: str) -> str:
+    if l.endswith('\n'):
+        return l[:-1]
+    return l
+
+
 class TaskMaster:
     def __init__(self, config_file: str, timestamp_provider: Callable[[], int] = current_timestamp) -> None:
         super().__init__()
@@ -24,7 +30,7 @@ class TaskMaster:
         self._timestamp_provider = timestamp_provider
         self._config_file = config_file
         with open(self._config_file, 'r') as file:
-            self._lines: [str] = file.readlines()
+            self._lines: [str] = list(map(remove_trailing_newline, file.readlines()))
 
     def _untitled_to_tasks(self) -> None:
         if self._lines[0].startswith('# '):
@@ -52,6 +58,9 @@ class TaskMaster:
         pass
 
     def _inject_extra_checkboxes(self):
+        check_groups = self._parse_check_groups()
+        sorted_groups = sorted(check_groups, key=lambda x: x['end'], reverse=True)
+
         def count_incomplete(s: int, e: int) -> int:
             result = 0
             for l in self._lines[s:e + 1]:
@@ -60,6 +69,136 @@ class TaskMaster:
                 pass
             return result
 
+        for group in sorted_groups:
+            start: int = group['start']
+            end: int = group['end']
+            if self._lines[end].strip() == '- [ ]':
+                continue
+            incomplete_tasks = count_incomplete(start, end)
+            if incomplete_tasks > 0:
+                line = self._lines[end]
+                padding = line[:line.index('- [')]
+                self._insert(end + 1, padding + '- [ ] ')
+
+    def _parse_tasks(self) -> {}:
+        check_groups = self._parse_check_groups()
+        tasks = []
+        task = {}
+        for i, line in enumerate(self._lines):
+            if line.startswith('# [') and 'start' not in task:
+                task['start'] = i
+                continue
+
+            end_of_file = i == len(self._lines) - 1
+            if 'start' in task and (line.startswith('# [') or end_of_file):
+                if end_of_file:
+                    task['end'] = i
+                else:
+                    task['end'] = i - 1
+                task['check_groups'] = list(filter(lambda g: g['start'] >= task['start'] and g['start'] <= task['end'], check_groups))
+
+                tasks.append(task)
+                task = {}
+
+        return tasks
+
+    def _move_checkboxes_comments_into_tasks(self):
+        def add_space_groups():
+            for t in tasks:
+                space_groups = []
+                check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
+
+                check_group_end = None
+                for cg in check_groups:
+                    cg_start = cg['start']
+                    cg_end = cg['end']
+                    if not check_group_end:
+                        check_group_end = cg_end
+                        continue
+
+                    if cg_start - check_group_end > 1:
+                        space_groups.append({
+                            'start': check_group_end + 1,
+                            'end': cg_start - 1,
+                        })
+                    check_group_end = cg_end
+
+                # TODO: last check group case
+
+                t['check_groups'] = check_groups
+                t['space_groups'] = space_groups
+            pass
+
+        def get_task_title(str: str) -> str:
+            return str[str.index(']') + 1:].strip()
+
+        tasks = self._parse_tasks()
+        add_space_groups()
+        insertions = []
+
+        for t in tasks:
+            space_groups = sorted(t['space_groups'], key=lambda x: x['end'], reverse=True)
+
+            if len(space_groups) == 0:
+                continue
+
+            for s in space_groups:
+                subtask_index = s['start'] - 1
+                insertions.append({
+                    'task_line': self._lines[t['start']],
+                    'subtask_line': self._lines[subtask_index],
+                    'lines': self._lines[s['start']:s['end']],
+                    'start': s['start'],
+                    'end': s['end'],
+                })
+                self._lines[subtask_index] = self._lines[subtask_index].replace('- [ ]', '- [^]')
+                self._remove(s['start'], s['end'])
+
+        for insertion in sort_by_end(insertions):
+            task_start: int = self._lines.index(insertion['task_line'])
+            new_task_lines: [str] = insertion['lines']
+            task = get_task_title(insertion['task_line'])
+            subtask = get_task_title(insertion['subtask_line'])
+            new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
+            if new_task_lines[-1].strip() != '':
+                new_task_lines.append('')
+            self._insert_all(index=task_start, lines=new_task_lines)
+        pass
+
+    def _remove(self, start: int, end: int):
+        new_lines = []
+        new_lines.extend(self._lines[:start])
+        new_lines.extend(self._lines[end + 1:])
+        self._lines = new_lines
+        self._changed = True
+
+    def execute(self):
+        self._untitled_to_tasks()
+        self._insert_setup_template_to_tasks()
+        self._move_checkboxes_comments_into_tasks()
+        self._inject_extra_checkboxes()
+
+        if self._changed:
+            updated_content = ''.join(map(lambda l: l+'\n', self._lines))
+            self._make_defensive_copy()
+            write_to(file_name=self._config_file, content=updated_content)
+
+    def _insert(self, index: int, line: str):
+        self._lines.insert(index, line)
+        self._changed = True
+
+    def _insert_all(self, index: int, lines: [str]):
+        for l in reversed(lines):
+            self._lines.insert(index, l)
+        self._changed = True
+
+    def _make_defensive_copy(self):
+        dst = HISTORY_DIR + '/' + str(uuid.uuid4())
+        os.makedirs(dst, exist_ok=True)
+        shutil.copy(self._config_file, dst + '/' + os.path.basename(self._config_file))
+        pass
+
+    def _parse_check_groups(self) -> []:
         check_groups = []
         check_group = {}
         for i, line in enumerate(self._lines):
@@ -93,38 +232,11 @@ class TaskMaster:
                         subgroup = {'start': start + i - 1}
 
         check_groups.extend(nested_groups)
-        sorted_groups = sorted(check_groups, key=lambda x: x['end'], reverse=True)
+        return check_groups
 
-        for group in sorted_groups:
-            start: int = group['start']
-            end: int = group['end']
-            if self._lines[end].strip() == '- [ ]':
-                continue
-            incomplete_tasks = count_incomplete(start, end)
-            if incomplete_tasks > 0:
-                line = self._lines[end]
-                padding = line[:line.index('- [')]
-                self._insert(end + 1, padding + '- [ ] ')
 
-    def execute(self):
-        self._untitled_to_tasks()
-        self._insert_setup_template_to_tasks()
-        self._inject_extra_checkboxes()
-
-        if self._changed:
-            updated_content = ''.join(self._lines)
-            self._make_defensive_copy()
-            write_to(file_name=self._config_file, content=updated_content)
-
-    def _insert(self, index: int, line):
-        self._lines.insert(index, line+'\n')
-        self._changed = True
-
-    def _make_defensive_copy(self):
-        dst = HISTORY_DIR + '/' + str(uuid.uuid4())
-        os.makedirs(dst, exist_ok=True)
-        shutil.copy(self._config_file, dst + '/' + os.path.basename(self._config_file))
-        pass
+def sort_by_end(a: []) -> []:
+    return sorted(a, key=lambda x: x['end'], reverse=True)
 
 
 def log(message: str) -> None:
