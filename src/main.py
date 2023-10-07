@@ -5,12 +5,18 @@ import uuid
 import time
 from datetime import datetime
 from typing import Callable
+import re
 
 python_script_path = os.path.dirname(__file__)
 LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
+
+
+def get_config_files(config_file: str) -> str:
+    name, _ = os.path.splitext(os.path.basename(config_file))
+    return os.path.dirname(config_file) + '/' + name + '.files'
 
 
 def get_padding(line: str) -> str:
@@ -22,6 +28,8 @@ def current_timestamp() -> int:
 
 
 def write_lines(dst: str, lines: [str]) -> None:
+    parent = os.path.dirname(dst)
+    os.makedirs(parent, exist_ok=True)
     updated_content = ''.join(map(lambda l: l + '\n', lines))
     text_file = open(dst, "w")
     text_file.write(updated_content)
@@ -209,6 +217,7 @@ class TaskMaster:
         self._move_checkboxes_comments_into_tasks()
         self._inject_extra_checkboxes()
         self._move_completed_tasks()
+        self._process_empty_links()
         trim_trailing_empty_lines(self._lines)
 
         if self._changed:
@@ -312,6 +321,80 @@ class TaskMaster:
             lines.insert(0, l)
 
         write_lines(self._history_file, lines)
+
+    def _process_empty_links(self):
+        def to_link(input_string: str) -> str:
+            replacement_char = '_'
+            # Remove leading and trailing whitespace
+            filename = input_string.strip()
+            filename = filename.replace(' ', replacement_char)
+            illegal_chars = r'[\/:*?"<>|~]'
+            filename = re.sub(illegal_chars, ' ', filename)
+            filename = filename.strip().replace(' ', replacement_char)
+            filename = re.sub(r'[_]+', replacement_char, filename)
+            # Trim filename length to 255 characters (a common limit on many filesystems)
+            filename = filename[:255]
+            if filename == '':
+                filename = 'untitled'
+            return get_config_files(self._config_file)+'/'+filename
+
+        def increasing_index_file(dst: str) -> str:
+            index = 0
+            candidate = dst
+            while os.path.exists(candidate):
+                candidate = dst + str(index)
+                index = index + 1
+
+            return candidate
+
+        def find_hyperlink_positions(markdown_text):
+            patterns = [
+                r'(?:!)?\[([^\]]+)\]\(\)',
+                r'(?:!)?\[\]\(\)',
+            ]
+            hyperlink_matches = []
+            for p in patterns:
+                matches = list(re.finditer(p, markdown_text))
+                hyperlink_matches.extend(matches)
+
+            hyperlink_positions = []
+            for match in hyperlink_matches:
+                start_position = match.start()
+                end_position = match.end()
+                is_picture_ref = markdown_text[start_position] == '!'
+                if is_picture_ref:
+                    title_shift = 2
+                else:
+                    title_shift = 1
+
+                if is_picture_ref:
+                    rel_link = '<not supported>'
+                else:
+                    raw_title = markdown_text[start_position+title_shift:end_position-3]
+                    abs_link = increasing_index_file(to_link(raw_title))
+                    write_lines(abs_link, [])
+                    rel_link = '.'+abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
+                hyperlink_positions.append({
+                    'start': start_position,
+                    'end': end_position,
+                    'link': markdown_text[start_position:end_position-1] + rel_link + ')',
+                })
+
+            return hyperlink_positions
+
+        for i, line in enumerate(self._lines):
+            hyperlinks = find_hyperlink_positions(line)
+            for h in sort_by_end(hyperlinks):
+                new_link = h.get('link', None)
+                if new_link:
+                    line = line[:h['start']] + new_link + line[h['end']:]
+                    self._update(i, line)
+        pass
+
+    def _update(self, i, line):
+        self._lines[i] = line
+        self._changed = True
+        pass
 
 
 def sort_by_end(a: []) -> []:

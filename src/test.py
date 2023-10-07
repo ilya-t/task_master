@@ -21,7 +21,7 @@ def read_file(f: str) -> str:
 def get_test_cases() -> [str]:
     for root, dirs, files in os.walk(python_script_path+'/tests/cases'):
         # debug filtering
-        # dirs = list(filter(lambda d: 'no_checkboxes_autogeneration_needed' == d, dirs))
+        dirs = list(filter(lambda d: 'links' in d, dirs))
         return list(map(lambda d: (d, root+'/'+d), dirs))
 
 
@@ -33,8 +33,11 @@ class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
     def test_cases(self, name: str, case_path: str):
         test_input = case_path + '/test_output.md'
-        shutil.copy(src = case_path+'/actual_input.md',
+        shutil.copy(src =case_path + '/actual_input.md',
                     dst =test_input)
+        temporal_files = main.get_config_files(test_input)
+        if os.path.exists(temporal_files):
+            shutil.rmtree(temporal_files)
         test_archive = '/tmp/' + str(uuid.uuid4()) + '.md'
         main.TaskMaster(taskflow_file=test_input,
                         history_file=test_archive,
