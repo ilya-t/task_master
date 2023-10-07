@@ -107,16 +107,21 @@ class TaskMaster:
 
             return all_completed or self._lines[end].rstrip() == group_padding + '- [ ]'
 
-        check_groups = self._parse_check_groups()
+        def try_insert_checkboxes(groups: []) -> None:
+            for group in sort_by_end(groups):
+                start: int = group['start']
+                end: int = group['end']
+                if group_completed_or_has_trailing_checkbox(start, end):
+                    continue
+                line = self._lines[start]
+                padding = line[:line.index('- [')]
+                self._insert(end + 1, padding + '- [ ] ')
+                children = group.get('children', None)
+                if children:
+                    try_insert_checkboxes(children)
 
-        for group in sort_by_end(check_groups):
-            start: int = group['start']
-            end: int = group['end']
-            if group_completed_or_has_trailing_checkbox(start, end):
-                continue
-            line = self._lines[start]
-            padding = line[:line.index('- [')]
-            self._insert(end + 1, padding + '- [ ] ')
+        check_groups = as_nested_dict(self._parse_check_groups())
+        try_insert_checkboxes(check_groups)
 
     def _parse_tasks(self) -> {}:
         check_groups = self._parse_check_groups()
@@ -396,6 +401,31 @@ class TaskMaster:
         self._lines[i] = line
         self._changed = True
         pass
+
+
+def as_nested_dict(intervals: []) -> []:
+    def find_parent(group: {}):
+        candidate = None
+        for g in intervals:
+            if g == group:
+                continue
+            if g['start'] <= group['start'] and g['end'] >= group['end']:
+                if not candidate or (g['end'] - g['start']) < (candidate['end'] - candidate['start']):
+                    candidate = g
+
+        return candidate
+
+    root = []
+
+    for interval in intervals:
+        parent = find_parent(interval)
+        if not parent:
+            root.append(interval)
+            continue
+        children = parent.get('children', [])
+        children.append(interval)
+        parent['children'] = children
+    return root
 
 
 def sort_by_end(a: []) -> []:
