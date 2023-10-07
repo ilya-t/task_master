@@ -2,6 +2,9 @@
 - [x] already completed task
     - [x] subtask#1
     - [x] subtask#2
+- [ ] deep task
+    - [ ] subtask level 1
+        - [ ] subtask level 2
 - [-] big task#1
     - [x] subtask#1
 - [ ] big task#2
