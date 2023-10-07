@@ -80,7 +80,8 @@ class TaskMaster:
                 continue
 
             if await_template:
-                if not line.startswith(DIVE_TEMPLATE_INTRO):
+                if line.strip() == '':
+                    self._remove(start=i, end=i)
                     self._insert_all(i, [
                         DIVE_TEMPLATE_INTRO,
                         '```sh',
