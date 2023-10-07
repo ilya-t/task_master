@@ -1,11 +1,13 @@
 import os
+import re
 import shutil
 import sys
-import uuid
 import time
+import uuid
 from datetime import datetime
 from typing import Callable
-import re
+
+from PIL import ImageGrab  # pip install pillow==10.0.0
 
 python_script_path = os.path.dirname(__file__)
 LOG_FILE = python_script_path + '/operations.log'
@@ -49,6 +51,18 @@ def read_lines(src) -> [str]:
 def trim_trailing_empty_lines(lines: [str]):
     while len(lines) > 0 and lines[-1].strip() == '':
         lines.pop(-1)
+
+
+def paste_image(file_path: str) -> bool:
+    image = ImageGrab.grabclipboard()
+
+    if image is not None:
+        parent = os.path.dirname(file_path)
+        os.makedirs(parent, exist_ok=True)
+        image.save(file_path, 'PNG')
+        return True
+
+    return False
 
 
 class TaskMaster:
@@ -329,7 +343,7 @@ class TaskMaster:
         write_lines(self._history_file, lines)
 
     def _process_empty_links(self):
-        def to_link(input_string: str) -> str:
+        def to_file_name(input_string: str) -> str:
             replacement_char = '_'
             # Remove leading and trailing whitespace
             filename = input_string.strip()
@@ -342,13 +356,15 @@ class TaskMaster:
             filename = filename[:255]
             if filename == '':
                 filename = 'untitled'
-            return get_config_files(self._config_file)+'/'+filename
+            return filename
 
         def increasing_index_file(dst: str) -> str:
             index = 0
+            parent = os.path.dirname(dst)
+            name, ext = os.path.splitext(os.path.basename(dst))
             candidate = dst
             while os.path.exists(candidate):
-                candidate = dst + str(index)
+                candidate = parent + '/' + name + str(index) + ext
                 index = index + 1
 
             return candidate
@@ -373,13 +389,18 @@ class TaskMaster:
                 else:
                     title_shift = 1
 
+                raw_title = markdown_text[start_position + title_shift:end_position - 3]
+                file_name = to_file_name(raw_title)
                 if is_picture_ref:
-                    rel_link = '<not supported>'
+                    if not file_name.lower().endswith('.png'):
+                        file_name += '.png'
+                abs_link = increasing_index_file(get_config_files(self._config_file)+'/'+file_name)
+                rel_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
+                if is_picture_ref:
+                    if not paste_image(abs_link):
+                        rel_link = '<no image in clipboard>'
                 else:
-                    raw_title = markdown_text[start_position+title_shift:end_position-3]
-                    abs_link = increasing_index_file(to_link(raw_title))
                     write_lines(abs_link, [])
-                    rel_link = '.'+abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
                 hyperlink_positions.append({
                     'start': start_position,
                     'end': end_position,
