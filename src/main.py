@@ -126,11 +126,11 @@ class TaskMaster:
             for group in sort_by_end(groups):
                 start: int = group['start']
                 end: int = group['end']
-                if group_completed_or_has_trailing_checkbox(start, end):
-                    continue
-                line = self._lines[start]
-                padding = line[:line.index('- [')]
-                self._insert(end + 1, padding + '- [ ] ')
+                if not group_completed_or_has_trailing_checkbox(start, end):
+                    line = self._lines[start]
+                    padding = line[:line.index('- [')]
+                    self._insert(end + 1, padding + '- [ ] ')
+
                 children = group.get('children', None)
                 if children:
                     try_insert_checkboxes(children)
