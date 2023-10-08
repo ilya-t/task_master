@@ -1,5 +1,6 @@
 import os
 import re
+import pyperclip
 import shutil
 import sys
 import time
@@ -400,7 +401,11 @@ class TaskMaster:
                     if not paste_image(abs_link):
                         rel_link = '<no image in clipboard>'
                 else:
-                    write_lines(abs_link, [])
+                    clip = pyperclip.paste()
+                    lines = []
+                    if clip:
+                        lines.append(clip)
+                    write_lines(abs_link, lines)
                 hyperlink_positions.append({
                     'start': start_position,
                     'end': end_position,
