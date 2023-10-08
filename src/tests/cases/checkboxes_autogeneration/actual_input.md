@@ -3,6 +3,9 @@
     - [x] subtask#1
     - [x] subtask#2
 - [ ] deep task
+    - [ ] subtasks with injection
+        - [ ] subtask level 2
+        - [ ] 
     - [ ] subtask level 1
         - [ ] subtask level 2
 - [-] big task#1

@@ -264,22 +264,22 @@ class TaskMaster:
         def parse_nested_groups(start: int, end: int) -> None:
             g = None
             root_padding = len(get_padding(self._lines[start]))
-            last_padding = len(get_padding(self._lines[start]))
+            group_padding = len(get_padding(self._lines[start]))
             for i, line in enumerate(self._lines[start:end+1]):
                 new_padding = len(get_padding(line))
-                if new_padding > last_padding:
+                if new_padding > group_padding:
                     if not g:
                         g = {'start':  start + i}
+                        group_padding = new_padding
                     parse_nested_groups(start+i, end)
-                if new_padding < last_padding:
+                if new_padding < group_padding:
                     if g:
                         g['end'] = start + i - 1
                         nested_groups.append(g)
+                        group_padding = root_padding
                     g = None
                 if new_padding < root_padding:
                     return
-
-                last_padding = new_padding
 
         check_groups = []
         check_group = {}
@@ -462,12 +462,14 @@ def as_nested_dict(intervals: []) -> []:
 
     for interval in intervals:
         parent = find_parent(interval)
-        if not parent:
+        if not parent and interval not in root:
             root.append(interval)
             continue
         children = parent.get('children', [])
-        children.append(interval)
-        parent['children'] = children
+
+        if interval not in children:
+            children.append(interval)
+            parent['children'] = children
     return root
 
 
