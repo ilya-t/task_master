@@ -1,5 +1,5 @@
 # task notes
-In the [result](./expected_output.md) of this test
+In the [result](./test_output.files/result.md) of this test
 we must see a few generated files:
 - [~wrong::number/](./test_output.files/wrong_number)
 - [>wrong||number<](./test_output.files/wrong_number0)

@@ -372,6 +372,7 @@ class TaskMaster:
 
         def find_hyperlink_positions(markdown_text):
             patterns = [
+                r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
                 r'(?:!)?\[([^\]]+)\]\(\)',
                 r'(?:!)?\[\]\(\)',
             ]
@@ -385,32 +386,48 @@ class TaskMaster:
                 start_position = match.start()
                 end_position = match.end()
                 is_picture_ref = markdown_text[start_position] == '!'
-                if is_picture_ref:
-                    title_shift = 2
-                else:
-                    title_shift = 1
+                full_link = markdown_text[start_position:end_position]
+                title = full_link[full_link.index('[')+1:full_link.index('](')]
+                link = full_link[full_link.index('](')+2:-1]
+                generate_file = len(link) == 0
+                full_file_name = to_file_name(title)
+                file_name, file_ext = os.path.splitext(full_file_name)
+                _, suggested_file_ext = os.path.splitext(os.path.basename(link))
+                if suggested_file_ext.startswith('.'):
+                    file_ext = suggested_file_ext
+                if is_picture_ref and generate_file and file_ext.lower() != '.png':
+                    file_ext = '.png'
+                abs_link = increasing_index_file(get_config_files(self._config_file)+'/'+file_name + file_ext)
+                processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
 
-                raw_title = markdown_text[start_position + title_shift:end_position - 3]
-                file_name = to_file_name(raw_title)
-                if is_picture_ref:
-                    if not file_name.lower().endswith('.png'):
-                        file_name += '.png'
-                abs_link = increasing_index_file(get_config_files(self._config_file)+'/'+file_name)
-                rel_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
-                if is_picture_ref:
-                    if not paste_image(abs_link):
-                        rel_link = '<no image in clipboard>'
+                if generate_file:
+                    if is_picture_ref:
+                        if not paste_image(abs_link):
+                            processed_link = '<no image in clipboard>'
+                    else:
+                        clip = pyperclip.paste()
+                        lines = []
+                        if clip:
+                            lines.append(clip)
+                        write_lines(abs_link, lines)
                 else:
-                    clip = pyperclip.paste()
-                    lines = []
-                    if clip:
-                        lines.append(clip)
-                    write_lines(abs_link, lines)
-                hyperlink_positions.append({
-                    'start': start_position,
-                    'end': end_position,
-                    'link': markdown_text[start_position:end_position-1] + rel_link + ')',
-                })
+                    origin_abs_link = to_abs_path(self._config_file, link)
+                    if os.path.exists(origin_abs_link):
+                        parent = os.path.dirname(abs_link)
+                        os.makedirs(parent, exist_ok=True)
+                        shutil.copy(origin_abs_link, abs_link)
+                    else:
+                        processed_link = None
+
+                if processed_link:
+                    prefix = ''
+                    if is_picture_ref:
+                        prefix = '!'
+                    hyperlink_positions.append({
+                        'start': start_position,
+                        'end': end_position,
+                        'link': prefix+'[' + title + '](' + processed_link + ')',
+                    })
 
             return hyperlink_positions
 
@@ -452,6 +469,15 @@ def as_nested_dict(intervals: []) -> []:
         children.append(interval)
         parent['children'] = children
     return root
+
+
+def to_abs_path(config_file: str, src_path: str) -> str:
+    if src_path.startswith('~'):
+        return os.path.expanduser(src_path)
+    elif src_path.startswith('./') or src_path.startswith('../'):
+        return os.path.dirname(config_file) + '/' + src_path
+
+    return src_path
 
 
 def sort_by_end(a: []) -> []:
