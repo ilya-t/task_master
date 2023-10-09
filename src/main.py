@@ -15,7 +15,7 @@ LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
-UNUSED_FILES = '# unused local files'
+UNUSED_FILES = '# [ ] unused local files'
 
 
 def get_config_files(config_file: str) -> str:
@@ -68,6 +68,10 @@ def paste_image(file_path: str) -> bool:
 
     return False
 
+def is_checkbox(line: str) -> bool:
+    l = line.lstrip()
+    return len(l) >= 4 and l.startswith('- [') and l[4] == ']'
+
 
 class TaskMaster:
     def __init__(self,
@@ -119,7 +123,7 @@ class TaskMaster:
                 if not nested_group_parent_completed:
                     all_completed = False
 
-            for gl in self._lines[start:end+1]:
+            for gl in self._lines[start:end + 1]:
                 if gl.startswith(group_padding + '- [ ]'):
                     all_completed = False
 
@@ -156,7 +160,8 @@ class TaskMaster:
                     task['end'] = i
                 else:
                     task['end'] = i - 1
-                task['check_groups'] = list(filter(lambda g: g['start'] >= task['start'] and g['start'] <= task['end'], check_groups))
+                task['check_groups'] = list(
+                    filter(lambda g: g['start'] >= task['start'] and g['start'] <= task['end'], check_groups))
 
                 tasks.append(task)
                 task = {
@@ -212,7 +217,7 @@ class TaskMaster:
 
             for s in space_groups:
                 subtask_index = s['start'] - 1
-                lines = self._lines[s['start']:s['end']+1]
+                lines = self._lines[s['start']:s['end'] + 1]
                 if len(''.join(lines).strip()) == 0:
                     continue
 
@@ -280,13 +285,13 @@ class TaskMaster:
             g = None
             root_padding = len(get_padding(self._lines[start]))
             group_padding = len(get_padding(self._lines[start]))
-            for i, line in enumerate(self._lines[start:end+1]):
+            for i, line in enumerate(self._lines[start:end + 1]):
                 new_padding = len(get_padding(line))
                 if new_padding > group_padding:
                     if not g:
-                        g = {'start':  start + i}
+                        g = {'start': start + i}
                         group_padding = new_padding
-                    parse_nested_groups(start+i, end)
+                    parse_nested_groups(start + i, end)
                 if new_padding < group_padding:
                     if g:
                         g['end'] = start + i - 1
@@ -299,11 +304,11 @@ class TaskMaster:
         check_groups = []
         check_group = {}
         for i, line in enumerate(self._lines):
-            if line.lstrip().startswith('- [') and 'start' not in check_group:
+            if is_checkbox(line) and 'start' not in check_group:
                 check_group['start'] = i
 
             end_of_file = i == len(self._lines) - 1
-            if 'start' in check_group and (not line.lstrip().startswith('- [') or end_of_file):
+            if 'start' in check_group and (not is_checkbox(line) or end_of_file):
                 if end_of_file:
                     check_group['end'] = i
                 else:
@@ -363,6 +368,7 @@ class TaskMaster:
             r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
             r'(?:!)?\[([^\]]+)\]\(\)',
             r'(?:!)?\[\]\(\)',
+            r'(?:!)?\[\]\(([^\]]+)\)',
         ]
         hyperlink_matches = []
         for p in patterns:
@@ -427,7 +433,7 @@ class TaskMaster:
                     file_ext = suggested_file_ext
                 if is_picture_ref and generate_file and file_ext.lower() != '.png':
                     file_ext = '.png'
-                abs_link = increasing_index_file(get_config_files(self._config_file)+'/'+file_name + file_ext)
+                abs_link = increasing_index_file(get_config_files(self._config_file) + '/' + file_name + file_ext)
                 processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
 
                 if generate_file:
@@ -506,13 +512,13 @@ class TaskMaster:
             return
         task = get_unused_files_task()
         for u in unused:
-            self._insert(task['start']+1, '- []('+u+')')
+            self._insert(task['start'] + 1, '- [](' + u + ')')
 
     def _gather_existing_files(self) -> [str]:
         config_files = get_config_files(self._config_file)
         dir = os.path.basename(config_files)
         for root, _, files in os.walk(config_files):
-            return list(map(lambda f: './'+dir+'/'+f, files))
+            return list(map(lambda f: './' + dir + '/' + f, files))
         return []
 
     def _trim_lines(self):
@@ -576,4 +582,3 @@ if __name__ == "__main__":
     if len(args) == 1:
         args.append('')
     TaskMaster(taskflow_file=args[0], history_file=args[1]).execute()
-
