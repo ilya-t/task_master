@@ -173,13 +173,6 @@ class TaskMaster:
                     cg_start = cg['start']
                     cg_end = cg['end']
 
-                    # if i == len(check_groups) - 1:
-                    #     space_groups.append({
-                    #         'start': cg_end + 1,
-                    #         'end': t['end'],
-                    #     })
-                    #     break
-
                     if not check_group_end:
                         check_group_end = cg_end
                         continue
@@ -191,7 +184,11 @@ class TaskMaster:
                         })
                     check_group_end = cg_end
 
-                # TODO: last check group case
+                if check_group_end:
+                    space_groups.append({
+                        'start': check_groups[-1]['end'] + 1,
+                        'end': t['end'],
+                    })
 
                 t['check_groups'] = check_groups
                 t['space_groups'] = space_groups
@@ -204,7 +201,7 @@ class TaskMaster:
         add_space_groups()
         insertions = []
 
-        for t in tasks:
+        for t in sort_by_end(tasks):
             space_groups = sort_by_end(t['space_groups'])
 
             if len(space_groups) == 0:
@@ -212,10 +209,13 @@ class TaskMaster:
 
             for s in space_groups:
                 subtask_index = s['start'] - 1
+                lines = self._lines[s['start']:s['end']+1]
+                if len(''.join(lines).strip()) == 0:
+                    continue
                 insertions.append({
                     'task_line': self._lines[t['start']],
                     'subtask_line': self._lines[subtask_index],
-                    'lines': self._lines[s['start']:s['end']+1],
+                    'lines': lines,
                     'start': s['start'],
                     'end': s['end'],
                 })
