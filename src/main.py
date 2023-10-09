@@ -169,9 +169,17 @@ class TaskMaster:
                 check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
                 check_groups = list(filter(lambda cg: len(get_padding(self._lines[cg['start']])) == 0, check_groups))
                 check_group_end = None
-                for cg in check_groups:
+                for i, cg in enumerate(check_groups):
                     cg_start = cg['start']
                     cg_end = cg['end']
+
+                    # if i == len(check_groups) - 1:
+                    #     space_groups.append({
+                    #         'start': cg_end + 1,
+                    #         'end': t['end'],
+                    #     })
+                    #     break
+
                     if not check_group_end:
                         check_group_end = cg_end
                         continue
@@ -414,7 +422,10 @@ class TaskMaster:
                     origin_abs_link = to_abs_path(self._config_file, link)
                     new_parent_dir = os.path.dirname(abs_link)
                     origin_parent_dir = os.path.dirname(origin_abs_link)
-                    if os.path.exists(origin_abs_link) and not os.path.samefile(new_parent_dir, origin_parent_dir):
+                    # TODO no test-case for `file_already_at_dst_dir` :(
+                    file_already_at_dst_dir = os.path.exists(new_parent_dir) and os.path.exists(
+                        origin_parent_dir) and os.path.samefile(new_parent_dir, origin_parent_dir)
+                    if os.path.exists(origin_abs_link) and not file_already_at_dst_dir:
                         os.makedirs(new_parent_dir, exist_ok=True)
                         shutil.copy(origin_abs_link, abs_link)
                     else:
