@@ -19,3 +19,10 @@ blah-blah
 - [ ] task #1
 - [^] task #2
 - [ ] 
+
+# [ ] brilliant idea #3
+- [ ] task #1
+- [ ] task #2
+- [ ] 
+some thoughts about idea itself that are
+not yet related to any task

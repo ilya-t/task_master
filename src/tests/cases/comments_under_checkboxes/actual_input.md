@@ -13,3 +13,10 @@ blah-blah
 - [ ] task #2
 some thoughts about bullet #2
 blah-blah
+
+# [ ] brilliant idea #3
+- [ ] task #1
+- [ ] task #2
+- [ ] 
+some thoughts about idea itself that are
+not yet related to any task

@@ -17,12 +17,15 @@ DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES = '# unused local files'
 
+
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
     return os.path.dirname(config_file) + '/' + name + '.files'
 
 
 def get_padding(line: str) -> str:
+    if len(line) == 0:
+        return ''
     return line[:line.index('- [')]
 
 
@@ -212,6 +215,10 @@ class TaskMaster:
                 lines = self._lines[s['start']:s['end']+1]
                 if len(''.join(lines).strip()) == 0:
                     continue
+
+                if len(get_task_title(self._lines[subtask_index]).strip()) == 0:
+                    continue
+
                 insertions.append({
                     'task_line': self._lines[t['start']],
                     'subtask_line': self._lines[subtask_index],
@@ -247,7 +254,7 @@ class TaskMaster:
         self._inject_extra_checkboxes()
         self._move_completed_tasks()
         self._process_links()
-        trim_trailing_empty_lines(self._lines)
+        self._trim_lines()
 
         if self._changed:
             self._make_defensive_copy()
@@ -507,6 +514,16 @@ class TaskMaster:
         for root, _, files in os.walk(config_files):
             return list(map(lambda f: './'+dir+'/'+f, files))
         return []
+
+    def _trim_lines(self):
+        for t in sort_by_end(self._parse_tasks()):
+            i = t['start'] - 1
+            if i < 0:
+                continue
+
+            if len(self._lines[i].strip()) > 0:
+                self._insert(i + 1, '')
+        trim_trailing_empty_lines(self._lines)
 
 
 def as_nested_dict(intervals: []) -> []:
