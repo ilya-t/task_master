@@ -412,9 +412,10 @@ class TaskMaster:
                         write_lines(abs_link, lines)
                 else:
                     origin_abs_link = to_abs_path(self._config_file, link)
-                    if os.path.exists(origin_abs_link):
-                        parent = os.path.dirname(abs_link)
-                        os.makedirs(parent, exist_ok=True)
+                    new_parent_dir = os.path.dirname(abs_link)
+                    origin_parent_dir = os.path.dirname(origin_abs_link)
+                    if os.path.exists(origin_abs_link) and not os.path.samefile(new_parent_dir, origin_parent_dir):
+                        os.makedirs(new_parent_dir, exist_ok=True)
                         shutil.copy(origin_abs_link, abs_link)
                     else:
                         processed_link = None
