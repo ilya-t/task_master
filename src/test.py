@@ -8,6 +8,7 @@ import os
 
 python_script_path = os.path.dirname(__file__)
 
+
 def file_compare(file1, file2):
     with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
         return f1.read() == f2.read()
@@ -38,6 +39,9 @@ class TestTaskMaster(unittest.TestCase):
         temporal_files = main.get_config_files(test_input)
         if os.path.exists(temporal_files):
             shutil.rmtree(temporal_files)
+        prepared_files = case_path + '/actual_input.files'
+        if os.path.exists(prepared_files):
+            shutil.copytree(prepared_files, temporal_files)
         test_archive = '/tmp/' + str(uuid.uuid4()) + '.md'
         main.TaskMaster(taskflow_file=test_input,
                         history_file=test_archive,

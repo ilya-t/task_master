@@ -15,7 +15,7 @@ LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
-
+UNUSED_FILES = '# unused local files'
 
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
@@ -246,7 +246,7 @@ class TaskMaster:
         self._move_checkboxes_comments_into_tasks()
         self._inject_extra_checkboxes()
         self._move_completed_tasks()
-        self._process_empty_links()
+        self._process_links()
         trim_trailing_empty_lines(self._lines)
 
         if self._changed:
@@ -351,7 +351,35 @@ class TaskMaster:
 
         write_lines(self._history_file, lines)
 
-    def _process_empty_links(self):
+    def _gather_links(self, markdown_text: str) -> []:
+        patterns = [
+            r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
+            r'(?:!)?\[([^\]]+)\]\(\)',
+            r'(?:!)?\[\]\(\)',
+        ]
+        hyperlink_matches = []
+        for p in patterns:
+            matches = list(re.finditer(p, markdown_text))
+            hyperlink_matches.extend(matches)
+
+        results = []
+
+        for match in hyperlink_matches:
+            start_position = match.start()
+            end_position = match.end()
+            full_link = markdown_text[start_position:end_position]
+            title = full_link[full_link.index('[') + 1:full_link.index('](')]
+            link = full_link[full_link.index('](') + 2:-1]
+            results.append({
+                'title': title,
+                'link': link,
+                'full_link': full_link,
+                'start': start_position,
+                'end': end_position,
+            })
+        return results
+
+    def _process_links(self):
         def to_file_name(input_string: str) -> str:
             replacement_char = '_'
             # Remove leading and trailing whitespace
@@ -378,25 +406,12 @@ class TaskMaster:
 
             return candidate
 
-        def find_hyperlink_positions(markdown_text):
-            patterns = [
-                r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
-                r'(?:!)?\[([^\]]+)\]\(\)',
-                r'(?:!)?\[\]\(\)',
-            ]
-            hyperlink_matches = []
-            for p in patterns:
-                matches = list(re.finditer(p, markdown_text))
-                hyperlink_matches.extend(matches)
-
-            hyperlink_positions = []
-            for match in hyperlink_matches:
-                start_position = match.start()
-                end_position = match.end()
-                is_picture_ref = markdown_text[start_position] == '!'
-                full_link = markdown_text[start_position:end_position]
-                title = full_link[full_link.index('[')+1:full_link.index('](')]
-                link = full_link[full_link.index('](')+2:-1]
+        def process_hyperlinks(hyperlinks: []):
+            for match in hyperlinks:
+                markdown_text = match['full_link']
+                is_picture_ref = markdown_text.startswith('!')
+                title = match['title']
+                link = match['link']
                 generate_file = len(link) == 0
                 full_file_name = to_file_name(title)
                 file_name, file_ext = os.path.splitext(full_file_name)
@@ -432,30 +447,66 @@ class TaskMaster:
                         processed_link = None
 
                 if processed_link:
-                    prefix = ''
-                    if is_picture_ref:
-                        prefix = '!'
-                    hyperlink_positions.append({
-                        'start': start_position,
-                        'end': end_position,
-                        'link': prefix+'[' + title + '](' + processed_link + ')',
-                    })
+                    match['processed_link'] = processed_link
 
-            return hyperlink_positions
+            return hyperlinks
+
+        used_links = set()
 
         for i, line in enumerate(self._lines):
-            hyperlinks = find_hyperlink_positions(line)
-            for h in sort_by_end(hyperlinks):
-                new_link = h.get('link', None)
+            line_links = process_hyperlinks(self._gather_links(line))
+
+            for h in sort_by_end(line_links):
+                new_link = h.get('processed_link', None)
+                used_links.add(h.get('processed_link', h['link']))
+
                 if new_link:
-                    line = line[:h['start']] + new_link + line[h['end']:]
+                    prefix = ''
+                    is_picture_ref = h['full_link'].startswith('!')
+                    if is_picture_ref:
+                        prefix = '!'
+                    full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
+                    line = line[:h['start']] + full_link + line[h['end']:]
                     self._update(i, line)
-        pass
+
+        existing_files: [str] = self._gather_existing_files()
+        unused_files: [str] = list(filter(lambda f: f not in used_links, existing_files))
+        self._update_unused(unused_files)
 
     def _update(self, i, line):
         self._lines[i] = line
         self._changed = True
         pass
+
+    def _update_unused(self, unused: [str]):
+        def get_unused_files_task() -> {}:
+            tasks = self._parse_tasks()
+            for t in tasks:
+                if self._lines[t['start']] == UNUSED_FILES:
+                    return t
+
+            lines = [
+                UNUSED_FILES,
+                '',
+            ]
+            self._insert_all(0, lines)
+            return {
+                'start': 0,
+                'end': len(lines),
+            }
+
+        if len(unused) == 0:
+            return
+        task = get_unused_files_task()
+        for u in unused:
+            self._insert(task['start']+1, '- []('+u+')')
+
+    def _gather_existing_files(self) -> [str]:
+        config_files = get_config_files(self._config_file)
+        dir = os.path.basename(config_files)
+        for root, _, files in os.walk(config_files):
+            return list(map(lambda f: './'+dir+'/'+f, files))
+        return []
 
 
 def as_nested_dict(intervals: []) -> []:
