@@ -175,7 +175,6 @@ class TaskMaster:
             for t in tasks:
                 space_groups = []
                 check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
-                check_groups = list(filter(lambda cg: len(get_padding(self._lines[cg['start']])) == 0, check_groups))
                 check_group_end = None
                 for i, cg in enumerate(check_groups):
                     cg_start = cg['start']
@@ -190,11 +189,13 @@ class TaskMaster:
                             'start': check_group_end + 1,
                             'end': cg_start - 1,
                         })
-                    check_group_end = cg_end
+
+                    if cg_end > check_group_end:
+                        check_group_end = cg_end
 
                 if check_group_end:
                     space_groups.append({
-                        'start': check_groups[-1]['end'] + 1,
+                        'start': check_group_end + 1,
                         'end': t['end'],
                     })
 
@@ -217,7 +218,8 @@ class TaskMaster:
 
             for s in space_groups:
                 subtask_index = s['start'] - 1
-                lines = self._lines[s['start']:s['end'] + 1]
+                group_padding = get_padding(self._lines[subtask_index])
+                lines = list(map(lambda s: s.removeprefix(group_padding), self._lines[s['start']:s['end'] + 1]))
                 if len(''.join(lines).strip()) == 0:
                     continue
 

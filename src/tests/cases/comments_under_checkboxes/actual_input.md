@@ -20,3 +20,15 @@ blah-blah
 - [ ] 
 some thoughts about idea itself that are
 not yet related to any task
+
+# [ ] brilliant idea #4
+- [ ] task #1
+- [ ] task #2
+    - [ ] subtask 2.1
+    Subtask 2.1 notes that should be moved outside
+    - [ ] subtask 2.2
+Subtask 2.2 notes that should be moved outside
+- [ ] task #3
+- [ ] 
+some thoughts about idea itself that are
+not yet related to any task
