@@ -68,9 +68,17 @@ def paste_image(file_path: str) -> bool:
 
     return False
 
+
 def is_checkbox(line: str) -> bool:
     l = line.lstrip()
     return len(l) >= 4 and l.startswith('- [') and l[4] == ']'
+
+
+def checkbox_status_index(line) -> int:
+    if not is_checkbox(line):
+        return -1
+
+    return len(get_padding(line)) + 3
 
 
 class TaskMaster:
@@ -259,6 +267,7 @@ class TaskMaster:
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
         self._inject_extra_checkboxes()
+        self._update_checkboxes_status()
         self._move_completed_tasks()
         self._process_links()
         self._trim_lines()
@@ -532,6 +541,25 @@ class TaskMaster:
             if len(self._lines[i].strip()) > 0:
                 self._insert(i + 1, '')
         trim_trailing_empty_lines(self._lines)
+
+    def _update_checkboxes_status(self):
+        for i, line in enumerate(self._lines):
+            index = checkbox_status_index(line)
+
+            if index >= 0 and line[index] != ' ':
+                continue
+
+            question = '? - '
+            if question not in line:
+                continue
+
+            has_answer = line.index(question) + len(question) < len(line) - 1
+
+            if not has_answer:
+                continue
+
+            self._update(i, line[:index] + 'x' + line[index + 1:])
+        pass
 
 
 def as_nested_dict(intervals: []) -> []:
