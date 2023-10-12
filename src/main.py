@@ -363,6 +363,8 @@ class TaskMaster:
         if len(completed) == 0:
             return
 
+        completed.append('')
+
         parent = os.path.dirname(self._history_file)
         os.makedirs(parent, exist_ok=True)
         lines = []

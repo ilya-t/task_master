@@ -30,26 +30,43 @@ def test_time() -> int:
     return 3371810400
 
 
+def prepare_artifact(src: str, dst: str):
+    if os.path.exists(dst):
+        if os.path.isdir(dst):
+            shutil.rmtree(dst)
+        else:
+            os.remove(dst)
+    if os.path.exists(src):
+        if os.path.isdir(src):
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy(src, dst)
+    pass
+
+
 class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
     def test_cases(self, name: str, case_path: str):
-        test_input = case_path + '/test_output.md'
-        shutil.copy(src =case_path + '/actual_input.md',
-                    dst =test_input)
-        temporal_files = main.get_config_files(test_input)
-        if os.path.exists(temporal_files):
-            shutil.rmtree(temporal_files)
-        prepared_files = case_path + '/actual_input.files'
-        if os.path.exists(prepared_files):
-            shutil.copytree(prepared_files, temporal_files)
-        test_archive = '/tmp/' + str(uuid.uuid4()) + '.md'
-        main.TaskMaster(taskflow_file=test_input,
+        test_output = case_path + '/test_output.md'
+        test_files = main.get_config_files(test_output)
+        test_archive = case_path + '/test_archive.md'
+
+        prepare_artifact(src=case_path + '/actual_input.md',
+                         dst=test_output)
+
+        prepare_artifact(src=case_path + '/actual_input.files',
+                         dst=test_files)
+
+        prepare_artifact(src=case_path + '/actual_archive.md',
+                         dst=test_archive)
+
+        main.TaskMaster(taskflow_file=test_output,
                         history_file=test_archive,
                         timestamp_provider=test_time).execute()
 
         self.assertEqual(
             read_file(case_path + '/expected_output.md'),
-            read_file(test_input),
+            read_file(test_output),
         )
 
         if os.path.exists(case_path + '/expected_archive.md'):

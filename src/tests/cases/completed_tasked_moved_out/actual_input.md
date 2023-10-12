@@ -7,8 +7,6 @@ git checkout branch_name
 - [x] completed
     - [x] subtask#1
 - [x] completed
-
-
 # [-] in-progress
 dive-in:
 ```sh
