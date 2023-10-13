@@ -548,7 +548,7 @@ class TaskMaster:
         for i, line in enumerate(self._lines):
             index = checkbox_status_index(line)
 
-            if index >= 0 and line[index] != ' ':
+            if index < 0 or line[index] != ' ':
                 continue
 
             question = '? - '
