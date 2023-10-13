@@ -98,7 +98,7 @@ class TaskMaster:
             return
 
         datetime_obj = datetime.fromtimestamp(self._timestamp_provider())
-        current_time = datetime_obj.strftime('%d_%m_%Y_%H_%M')
+        current_time = datetime_obj.strftime('%Y.%m.%d ')
 
         self._insert(0, '# [ ] ' + current_time)
 
