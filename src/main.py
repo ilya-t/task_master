@@ -418,10 +418,17 @@ class TaskMaster:
                     insertion_at_point['start'] = i
                     break
 
-        insertions_at_tasks = list(map(lambda task: insertions_at_tasks[task], insertions_at_tasks))
+        def flatten(t: str) -> {}:
+            r = insertions_at_tasks[t]
+            r['root_task_title'] = t
+            return r
+        insertions_at_tasks = list(map(flatten, insertions_at_tasks))
 
         for insertion in sorted(insertions_at_tasks, key=lambda x: x['start'], reverse=True):
             completed = insertion['lines']
+            root_title = insertion['root_task_title']
+            if lines[insertion['start']] != root_title and len(root_title.strip()) > 0:
+                completed.insert(0, root_title)
             if len(lines[insertion['start'] + 1].strip()) > 0:
                 completed.append('')
             for l in reversed(completed):
