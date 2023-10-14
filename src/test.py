@@ -73,6 +73,7 @@ class TestTaskMaster(unittest.TestCase):
             self.assertEqual(
                 read_file(case_path + '/expected_archive.md'),
                 read_file(test_archive),
+                msg='Archives are different!'
             )
 
 

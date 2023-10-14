@@ -1,5 +1,7 @@
 import os
 import re
+import typing
+
 import pyperclip
 import shutil
 import sys
@@ -158,12 +160,13 @@ class TaskMaster:
         tasks = []
         task = {}
         for i, line in enumerate(self._lines):
-            if line.startswith('# [') and 'start' not in task:
+            line_is_task = is_task(line)
+            if line_is_task and 'start' not in task:
                 task['start'] = i
                 continue
 
             end_of_file = i == len(self._lines) - 1
-            if 'start' in task and (line.startswith('# [') or end_of_file):
+            if 'start' in task and (line_is_task or end_of_file):
                 if end_of_file:
                     task['end'] = i
                 else:
@@ -210,9 +213,6 @@ class TaskMaster:
                 t['check_groups'] = check_groups
                 t['space_groups'] = space_groups
             pass
-
-        def get_task_title(str: str) -> str:
-            return str[str.index(']') + 1:].strip()
 
         tasks = self._parse_tasks()
         add_space_groups()
@@ -337,18 +337,47 @@ class TaskMaster:
         return check_groups
 
     def _move_completed_tasks(self):
+        def get_level(line: str) -> int:
+            level = 0
+            while line.startswith('#'):
+                line = line.removeprefix('#')
+                level += 1
+            return level
+
+        def get_parent(subtask: {}, tasks: [{}]):
+            subtask_lvl = get_level(self._lines[subtask['start']])
+            for t in sort_by_end(tasks):
+                if t['end'] > subtask['start']:
+                    continue
+                lvl = get_level(self._lines[t['start']])
+
+                if lvl < subtask_lvl:
+                    return t
+
+            return None
+
         if self._history_file == '':
             return
 
         tasks = self._parse_tasks()
-        completed: [str] = []
+        insertions = {}
 
         for t in sort_by_end(tasks):
             start = t['start']
             end = t['end']
             task_title = self._lines[start]
-            if not task_title.startswith('# [x] '):
+
+            if not is_task(task_title, status='x'):
                 continue
+
+            parent_task_title = ''
+            parent_task = get_parent(t, tasks)
+            if parent_task:
+                raw = self._lines[parent_task['start']]
+                parent_task_title = (get_level(raw) * '#') + ' ' + get_task_title(raw)
+
+            completed = insertions.get(parent_task_title, [])
+            insertions[parent_task_title] = completed
             raw_task_lines = self._lines[start:end + 1]
             trim_trailing_empty_lines(raw_task_lines)
             raw_task_lines.append('')
@@ -358,21 +387,45 @@ class TaskMaster:
 
             self._remove(start, end)
 
-        trim_trailing_empty_lines(completed)
+        overall_insertions = 0
+        for key in insertions:
+            completed = insertions[key]
+            trim_trailing_empty_lines(completed)
+            overall_insertions += len(completed)
 
-        if len(completed) == 0:
+        if overall_insertions == 0:
             return
-
-        completed.append('')
 
         parent = os.path.dirname(self._history_file)
         os.makedirs(parent, exist_ok=True)
         lines = []
         if os.path.exists(self._history_file):
             lines = read_lines(self._history_file)
+        if len(lines) == 0:
+            lines.append('')
 
-        for l in reversed(completed):
-            lines.insert(0, l)
+        insertions_at_tasks = {}
+        for task in insertions:
+            insertion_at_point = {
+                'start': -1,
+                'lines': insertions[task],
+            }
+            insertions_at_tasks[task] = insertion_at_point
+            if len(task.strip()) == 0:
+                continue
+            for i, l in enumerate(lines):
+                if l == task:
+                    insertion_at_point['start'] = i
+                    break
+
+        insertions_at_tasks = list(map(lambda task: insertions_at_tasks[task], insertions_at_tasks))
+
+        for insertion in sorted(insertions_at_tasks, key=lambda x: x['start'], reverse=True):
+            completed = insertion['lines']
+            if len(lines[insertion['start'] + 1].strip()) > 0:
+                completed.append('')
+            for l in reversed(completed):
+                lines.insert(insertion['start'] + 1, l)
 
         write_lines(self._history_file, lines)
 
@@ -607,6 +660,26 @@ def sort_by_end(a: []) -> []:
 def log(message: str) -> None:
     with open(LOG_FILE, mode='a') as log_file:
         print(message, file=log_file)
+
+
+def is_task(line, status: str = None) -> bool:
+    line = line.lstrip()
+
+    while line.startswith('#'):
+        line = line.removeprefix('#')
+    line = '-' + line
+    index = checkbox_status_index(line)
+
+    if index < 0:
+        return False
+
+    if status and line[index] != status:
+        return False
+    return True
+
+
+def get_task_title(str: str) -> str:
+    return str[str.index(']') + 1:].strip()
 
 
 if __name__ == "__main__":
