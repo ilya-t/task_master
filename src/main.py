@@ -182,8 +182,19 @@ class TaskMaster:
         return tasks
 
     def _move_checkboxes_comments_into_tasks(self):
-        def add_space_groups():
-            for t in tasks:
+        def fix_space_groups_bounds(sg: []) -> []:
+            for s in sg:
+                i: int = s['start']
+
+                while i <= s['end']:
+                    if self._lines[i].startswith('#'):
+                        s['end'] = i - 1
+                        break
+                    i += 1
+            return sg
+
+        def add_space_groups(target_tasks: []):
+            for t in target_tasks:
                 space_groups = []
                 check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
                 check_group_end = None
@@ -211,11 +222,11 @@ class TaskMaster:
                     })
 
                 t['check_groups'] = check_groups
-                t['space_groups'] = space_groups
+                t['space_groups'] = fix_space_groups_bounds(space_groups)
             pass
 
         tasks = self._parse_tasks()
-        add_space_groups()
+        add_space_groups(tasks)
         insertions = []
 
         for t in sort_by_end(tasks):
