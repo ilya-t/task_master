@@ -26,4 +26,10 @@
 - [-] task#1
 - [ ] task#2
     - [ ] subtask to task#2
-    - [ ]  
+    - [ ]
+
+# [ ] big story
+- [ ] first task
+
+## sub-story
+this is not a part of `first task`
