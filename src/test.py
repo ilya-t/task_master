@@ -1,5 +1,4 @@
 import unittest
-import uuid
 
 from parameterized import parameterized  # pip3 install parameterized # ?
 import main
@@ -22,7 +21,7 @@ def read_file(f: str) -> str:
 def get_test_cases() -> [str]:
     for root, dirs, files in os.walk(python_script_path+'/tests/cases'):
         # debug filtering
-        # dirs = list(filter(lambda d: 'completed_tasks_moved_out' == d, dirs))
+        # dirs = list(filter(lambda d: 'completed_subtasks_with_arrows_moved_by_structure' == d, dirs))
         return list(map(lambda d: (d, root+'/'+d), dirs))
 
 

@@ -355,23 +355,40 @@ class TaskMaster:
                 level += 1
             return level
 
-        def get_parent(subtask: {}, tasks: [{}]):
+        def get_parents(subtask: {}, tasks: [{}]):
             subtask_lvl = get_level(self._lines[subtask['start']])
+            results = []
             for t in sort_by_end(tasks):
-                if t['end'] > subtask['start']:
+                is_below_subtask = t['end'] > subtask['start']
+                if is_below_subtask:
                     continue
                 lvl = get_level(self._lines[t['start']])
 
                 if lvl < subtask_lvl:
-                    return t
+                    results.append(self._lines[t['start']])
 
-            return None
+                if lvl == 1:
+                    break
 
+            return results
+
+        def get_insertion_specs(t: {}) -> {}:
+            lines: [] = self._lines[start + 1:end + 1]
+            trim_trailing_empty_lines(lines)
+            address = [self._lines[t['start']]]
+
+            for p in get_parents(t, tasks):
+                address.insert(0, p)
+            address = list(map(lambda e: get_task_title(e), address))
+            return {
+                'lines': lines,
+                'address': address,
+            }
         if self._history_file == '':
             return
 
         tasks = self._parse_tasks()
-        insertions = {}
+        insertions = []
 
         for t in sort_by_end(tasks):
             start = t['start']
@@ -381,71 +398,71 @@ class TaskMaster:
             if not is_task(task_title, status='x'):
                 continue
 
-            parent_task_title = ''
-            parent_task = get_parent(t, tasks)
-            if parent_task:
-                raw = self._lines[parent_task['start']]
-                parent_task_title = (get_level(raw) * '#') + ' ' + get_task_title(raw)
-
-            completed = insertions.get(parent_task_title, [])
-            insertions[parent_task_title] = completed
-            raw_task_lines = self._lines[start:end + 1]
-            trim_trailing_empty_lines(raw_task_lines)
-            raw_task_lines.append('')
-            for l in reversed(raw_task_lines):
-                completed.insert(0, l)
-            completed[0] = completed[0].replace('# [x] ', '# ')
-
+            insertions.append(get_insertion_specs(t))
             self._remove(start, end)
 
         overall_insertions = 0
-        for key in insertions:
-            completed = insertions[key]
-            trim_trailing_empty_lines(completed)
-            overall_insertions += len(completed)
+        for insertion in insertions:
+            overall_insertions += len(insertion['lines'])
 
         if overall_insertions == 0:
             return
 
-        parent = os.path.dirname(self._history_file)
-        os.makedirs(parent, exist_ok=True)
-        lines = []
-        if os.path.exists(self._history_file):
-            lines = read_lines(self._history_file)
-        if len(lines) == 0:
+        history_lines = self._read_history_file()
+
+        for insertion in insertions:
+            history_lines = self.insert_topic_to_history(history_lines, insertion)
+
+        write_lines(self._history_file, history_lines)
+
+    @staticmethod
+    def insert_topic_to_history(history_lines: [str], topic_insertion: [{}]) -> [str]:
+        address = topic_insertion['address']
+
+        def get_title(address_index: int) -> str:
+            return '#' * (address_index + 1) + ' ' + address[address_index]
+
+        def get_existing_topic_positions() -> [int]:
+            lvl = 0
+            positions = []
+            title = get_title(lvl)
+            for i, l in enumerate(history_lines):
+                if l.rstrip() != title:
+                    continue
+
+                positions.append(i)
+                if len(positions) == len(address):
+                    break
+                lvl += 1
+                title = get_title(lvl)
+            return positions
+
+        topic_positions = get_existing_topic_positions()
+
+        # add non-existent topics
+        if len(topic_positions) < len(address):
+            last_existing_topic_lvl = len(topic_positions)
+
+            new_topics = []
+            while last_existing_topic_lvl < len(address):
+                new_topics.append(get_title(last_existing_topic_lvl))
+                last_existing_topic_lvl += 1
+
+            if len(topic_positions) == 0:
+                existing_topic_line = 0
+            else:
+                existing_topic_line = topic_positions[-1] + 1
+            _insert_all(history_lines, existing_topic_line, new_topics)
+
+        # add topic content
+        topic_positions = get_existing_topic_positions()
+        content_insertion_line = topic_positions[-1] + 1
+        lines: [str] = topic_insertion['lines']
+        if len(lines[-1].strip()) > 0 and len(history_lines[content_insertion_line].strip()) > 0:
             lines.append('')
 
-        insertions_at_tasks = {}
-        for task in insertions:
-            insertion_at_point = {
-                'start': -1,
-                'lines': insertions[task],
-            }
-            insertions_at_tasks[task] = insertion_at_point
-            if len(task.strip()) == 0:
-                continue
-            for i, l in enumerate(lines):
-                if l == task:
-                    insertion_at_point['start'] = i
-                    break
-
-        def flatten(t: str) -> {}:
-            r = insertions_at_tasks[t]
-            r['root_task_title'] = t
-            return r
-        insertions_at_tasks = list(map(flatten, insertions_at_tasks))
-
-        for insertion in sorted(insertions_at_tasks, key=lambda x: x['start'], reverse=True):
-            completed = insertion['lines']
-            root_title = insertion['root_task_title']
-            if lines[insertion['start']] != root_title and len(root_title.strip()) > 0:
-                completed.insert(0, root_title)
-            if len(lines[insertion['start'] + 1].strip()) > 0:
-                completed.append('')
-            for l in reversed(completed):
-                lines.insert(insertion['start'] + 1, l)
-
-        write_lines(self._history_file, lines)
+        _insert_all(history_lines, content_insertion_line, lines)
+        return history_lines
 
     def _gather_links(self, markdown_text: str) -> []:
         patterns = [
@@ -633,6 +650,21 @@ class TaskMaster:
 
             self._update(i, line[:index] + 'x' + line[index + 1:])
         pass
+
+    def _read_history_file(self) -> []:
+        parent = os.path.dirname(self._history_file)
+        os.makedirs(parent, exist_ok=True)
+        history_lines = []
+        if os.path.exists(self._history_file):
+            history_lines = read_lines(self._history_file)
+        if len(history_lines) == 0:
+            history_lines.append('')
+        return history_lines
+
+
+def _insert_all(dst: [str], index: int, lines: [str]):
+    for l in reversed(lines):
+        dst.insert(index, l)
 
 
 def as_nested_dict(intervals: []) -> []:
