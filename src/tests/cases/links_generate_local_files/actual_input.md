@@ -9,3 +9,6 @@ we must see a few generated files:
 - picture from clipboard: ![]()
 - picture ![]() and non picture []() mix!
 - picture from clipboard with name: ![named_pic]()
+
+no generation is done for links:
+- [existing file](../.gitignore)
