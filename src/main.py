@@ -372,14 +372,21 @@ class TaskMaster:
 
             return results
 
-        def get_insertion_specs(t: {}) -> {}:
+        def split_title_to_address(title: str) -> [str]:
+            return list(map(lambda part: part.strip(), title.split('->')))
+
+        def get_insertion_specs(task: {}) -> {}:
+            start = task['start']
+            end = task['end']
             lines: [] = self._lines[start + 1:end + 1]
             trim_trailing_empty_lines(lines)
-            address = [self._lines[t['start']]]
+            address = [self._lines[start]]
 
-            for p in get_parents(t, tasks):
+            for p in get_parents(task, tasks):
                 address.insert(0, p)
             address = list(map(lambda e: get_task_title(e), address))
+            if len(address) == 1:
+                address = split_title_to_address(get_task_title(self._lines[start]))
             return {
                 'lines': lines,
                 'address': address,
