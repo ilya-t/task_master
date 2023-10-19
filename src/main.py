@@ -94,6 +94,7 @@ class TaskMaster:
         self._config_file = taskflow_file
         self._history_file = history_file
         self._lines: [str] = read_lines(self._config_file)
+        self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
 
     def _untitled_to_tasks(self) -> None:
         if self._lines[0].startswith('# '):
@@ -276,6 +277,10 @@ class TaskMaster:
             self._insert_all(index=task_start, lines=new_task_lines)
         pass
 
+    def _remove_line(self, index: int):
+        self._lines.pop(index)
+        self._changed = True
+
     def _remove(self, start: int, end: int):
         new_lines = []
         new_lines.extend(self._lines[:start])
@@ -307,9 +312,8 @@ class TaskMaster:
         self._changed = True
 
     def _make_defensive_copy(self):
-        dst = HISTORY_DIR + '/' + str(uuid.uuid4())
-        os.makedirs(dst, exist_ok=True)
-        shutil.copy(self._config_file, dst + '/' + os.path.basename(self._config_file))
+        os.makedirs(self._memories_dir, exist_ok=True)
+        shutil.copy(self._config_file, self._memories_dir + '/' + os.path.basename(self._config_file))
         pass
 
     def _parse_check_groups(self) -> []:
@@ -592,31 +596,73 @@ class TaskMaster:
 
         existing_files: [str] = self._gather_existing_files()
         unused_files: [str] = list(filter(lambda f: f not in used_links, existing_files))
-        self._update_unused(unused_files)
+        self._prepare_unused(unused_files)
+        self._process_unused()
 
     def _update(self, i, line):
         self._lines[i] = line
         self._changed = True
         pass
 
-    def _update_unused(self, unused: [str]):
-        def get_unused_files_topic_start() -> int:
-            for i, line in enumerate(self._lines):
-                if line == UNUSED_FILES:
-                    return i
+    def get_unused_files_topic(self) -> {}:
+        result = {}
+        for i, line in enumerate(self._lines):
+            if line == UNUSED_FILES:
+                result['start'] = i
+                break
 
+            if 'start' in result and line.startswith('#'):
+                result['end'] = i - 1
+
+        if 'start' not in result:
+            return None
+        if 'end' not in result:
+            result['end'] = len(self._lines) - 1
+        return result
+
+    def _prepare_unused(self, unused: [str]):
+        if len(unused) == 0:
+            return
+
+        topic = self.get_unused_files_topic()
+        if not topic:
             lines = [
                 UNUSED_FILES,
                 '',
             ]
             self._insert_all(0, lines)
-            return 0
+            start = 0
+        else:
+            start = topic['start']
 
-        if len(unused) == 0:
-            return
-        start = get_unused_files_topic_start()
         for u in unused:
             self._insert(start + 1, '- [ ] [complete to delete](' + u + ')')
+
+    def _process_unused(self):
+        topic = self.get_unused_files_topic()
+        if not topic:
+            return
+
+        for i in reversed(range(topic['start'], topic['end'] + 1)):
+            line = self._lines[i]
+            status = checkbox_status_index(line)
+            if status < 0:
+                continue
+
+            if line[status] != 'x':
+                continue
+
+            link = self._gather_links(line)[0]['link']
+            src = to_abs_path(self._config_file, link)
+            if os.path.exists(src):
+                mem_dir = self._memories_dir + '/deleted_files'
+
+                os.makedirs(mem_dir, exist_ok=True)
+                dst = mem_dir + '/' + os.path.basename(src)
+                shutil.move(src, dst)
+                log(f'moving: {link} -> {dst}')
+            self._remove_line(i)
+
 
     def _gather_existing_files(self) -> [str]:
         config_files = get_config_files(self._config_file)

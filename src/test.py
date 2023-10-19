@@ -4,6 +4,7 @@ from parameterized import parameterized  # pip3 install parameterized # ?
 import main
 import shutil
 import os
+import filecmp
 
 python_script_path = os.path.dirname(__file__)
 
@@ -21,7 +22,7 @@ def read_file(f: str) -> str:
 def get_test_cases() -> [str]:
     for root, dirs, files in os.walk(python_script_path+'/tests/cases'):
         # debug filtering
-        # dirs = list(filter(lambda d: 'completed_subtasks_with_arrows_moved_by_structure' == d, dirs))
+        # dirs = list(filter(lambda d: 'deletion_of_unused_local_files' == d, dirs))
         return list(map(lambda d: (d, root+'/'+d), dirs))
 
 
@@ -74,6 +75,24 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_archive),
                 msg='Archives are different!'
             )
+
+        if os.path.exists(case_path + '/expected_output.files'):
+            self.compare_directories(
+                case_path + '/expected_output.files',
+                case_path + '/test_output.files',
+            )
+
+    def compare_directories(self, expected_dir, actual_dir):
+        comparison = filecmp.dircmp(expected_dir, actual_dir)
+
+        diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
+        self.assertEqual(0, diff, '\n'.join([
+            "The directories are not equal. Differences:",
+            "Common Files:", '\n'.join(comparison.common_files),
+            "Different Files:", '\n'.join(comparison.diff_files),
+            "Files only in the expected directory:", '\n'.join(comparison.left_only),
+            "Files only in the actual directory:", '\n'.join(comparison.right_only),
+        ]))
 
 
 if __name__ == "__main__":
