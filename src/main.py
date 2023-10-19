@@ -17,7 +17,7 @@ LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
-UNUSED_FILES = '# [ ] unused local files'
+UNUSED_FILES = '# unused local files'
 
 
 def get_config_files(config_file: str) -> str:
@@ -124,7 +124,7 @@ class TaskMaster:
         pass
 
     def _inject_extra_checkboxes(self):
-        def group_completed_or_has_trailing_checkbox(start: int, end: int) -> bool:
+        def can_add_trailing_checkbox(start: int, end: int) -> bool:
             start_line = self._lines[start]
             group_padding = start_line[:start_line.index('- [')]
             all_completed = True
@@ -137,13 +137,23 @@ class TaskMaster:
                 if gl.startswith(group_padding + '- [ ]'):
                     all_completed = False
 
-            return all_completed or self._lines[end].rstrip() == group_padding + '- [ ]'
+            if all_completed:
+                return False
+
+            already_has_trailing_checkbox = self._lines[end].rstrip() == group_padding + '- [ ]'
+            if already_has_trailing_checkbox:
+                return False
+
+            if self._lines[start-1] == UNUSED_FILES:
+                return False
+
+            return True
 
         def try_insert_checkboxes(groups: []) -> None:
             for group in sort_by_end(groups):
                 start: int = group['start']
                 end: int = group['end']
-                if not group_completed_or_has_trailing_checkbox(start, end):
+                if can_add_trailing_checkbox(start, end):
                     line = self._lines[start]
                     padding = line[:line.index('- [')]
                     self._insert(end + 1, padding + '- [ ] ')
@@ -590,27 +600,23 @@ class TaskMaster:
         pass
 
     def _update_unused(self, unused: [str]):
-        def get_unused_files_task() -> {}:
-            tasks = self._parse_tasks()
-            for t in tasks:
-                if self._lines[t['start']] == UNUSED_FILES:
-                    return t
+        def get_unused_files_topic_start() -> int:
+            for i, line in enumerate(self._lines):
+                if line == UNUSED_FILES:
+                    return i
 
             lines = [
                 UNUSED_FILES,
                 '',
             ]
             self._insert_all(0, lines)
-            return {
-                'start': 0,
-                'end': len(lines),
-            }
+            return 0
 
         if len(unused) == 0:
             return
-        task = get_unused_files_task()
+        start = get_unused_files_topic_start()
         for u in unused:
-            self._insert(task['start'] + 1, '- [](' + u + ')')
+            self._insert(start + 1, '- [ ] [complete to delete](' + u + ')')
 
     def _gather_existing_files(self) -> [str]:
         config_files = get_config_files(self._config_file)
