@@ -548,17 +548,7 @@ class TaskMaster:
                             lines.append(clip)
                         write_lines(abs_link, lines)
                 else:
-                    origin_abs_link = to_abs_path(self._config_file, link)
-                    new_parent_dir = os.path.dirname(abs_link)
-                    origin_parent_dir = os.path.dirname(origin_abs_link)
-                    # TODO no test-case for `file_already_at_dst_dir` :(
-                    file_already_at_dst_dir = os.path.exists(new_parent_dir) and os.path.exists(
-                        origin_parent_dir) and os.path.samefile(new_parent_dir, origin_parent_dir)
-                    if os.path.exists(origin_abs_link) and not file_already_at_dst_dir:
-                        os.makedirs(new_parent_dir, exist_ok=True)
-                        shutil.copy(origin_abs_link, abs_link)
-                    else:
-                        processed_link = None
+                    processed_link = None
 
                 if processed_link:
                     match['processed_link'] = processed_link

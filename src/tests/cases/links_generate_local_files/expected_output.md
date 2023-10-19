@@ -1,6 +1,5 @@
 # task notes
-In the [result](./test_output.files/result.md) of this test
-we must see a few generated files:
+In the result of this test we must see a few generated files:
 - [~wrong::number/](./test_output.files/wrong_number)
 - [>wrong||number<](./test_output.files/wrong_number0)
 - markdown sample: [a.md](./test_output.files/a.md)
@@ -11,4 +10,4 @@ we must see a few generated files:
 - picture from clipboard with name: ![named_pic](<no image in clipboard>)
 
 no generation is done for links:
-- [existing file](../.gitignore)
+- [existing file](./expected_output.md)
