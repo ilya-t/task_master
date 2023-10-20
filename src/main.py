@@ -644,6 +644,7 @@ class TaskMaster:
         if not topic:
             return
 
+        config_files = get_config_files(self._config_file)
         for i in reversed(range(topic['start'], topic['end'] + 1)):
             line = self._lines[i]
             status = checkbox_status_index(line)
@@ -654,9 +655,15 @@ class TaskMaster:
                 continue
 
             print(topic, line)
-            link = self._gather_links(line)[0]['link']
+            links = self._gather_links(line)
+
+            if len(links) == 0:
+                continue
+
+            link = links[0]['link']
             src = to_abs_path(self._config_file, link)
-            if os.path.exists(src):
+            is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(config_files) # TODO improve check
+            if is_local_config_file and os.path.exists(src):
                 mem_dir = self._memories_dir + '/deleted_files'
 
                 os.makedirs(mem_dir, exist_ok=True)
