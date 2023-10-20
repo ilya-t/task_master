@@ -3,9 +3,9 @@ It had a perfectly round door like a porthole, painted green, with a shiny yello
 in the exact middle...
 
 # [ ] big story
-- [^] part#1
+- [x] part#1
 - [^] part#2
 
 # [ ] a new beginning
-- [^] opening crawl
-- [^] Episode IV
+- [x] opening crawl
+- [x] Episode IV
