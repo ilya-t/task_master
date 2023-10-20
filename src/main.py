@@ -613,6 +613,7 @@ class TaskMaster:
 
             if 'start' in result and line.startswith('#'):
                 result['end'] = i - 1
+                break
 
         if 'start' not in result:
             return None
@@ -652,6 +653,7 @@ class TaskMaster:
             if line[status] != 'x':
                 continue
 
+            print(topic, line)
             link = self._gather_links(line)[0]['link']
             src = to_abs_path(self._config_file, link)
             if os.path.exists(src):
