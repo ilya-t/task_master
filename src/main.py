@@ -609,7 +609,7 @@ class TaskMaster:
         for i, line in enumerate(self._lines):
             if line == UNUSED_FILES:
                 result['start'] = i
-                break
+                continue
 
             if 'start' in result and line.startswith('#'):
                 result['end'] = i - 1
