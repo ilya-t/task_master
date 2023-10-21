@@ -166,31 +166,31 @@ class TaskMaster:
         check_groups = as_nested_dict(self._parse_check_groups())
         try_insert_checkboxes(check_groups)
 
-    def _parse_tasks(self) -> {}:
+    def _parse_topics(self) -> {}:
         check_groups = self._parse_check_groups()
-        tasks = []
-        task = {}
+        topics = []
+        topic = {}
         for i, line in enumerate(self._lines):
-            line_is_task = is_task(line)
-            if line_is_task and 'start' not in task:
-                task['start'] = i
+            line_is_topic = line.startswith('#')
+            if line_is_topic and 'start' not in topic:
+                topic['start'] = i
                 continue
 
             end_of_file = i == len(self._lines) - 1
-            if 'start' in task and (line_is_task or end_of_file):
+            if 'start' in topic and (line_is_topic or end_of_file):
                 if end_of_file:
-                    task['end'] = i
+                    topic['end'] = i
                 else:
-                    task['end'] = i - 1
-                task['check_groups'] = list(
-                    filter(lambda g: g['start'] >= task['start'] and g['start'] <= task['end'], check_groups))
+                    topic['end'] = i - 1
+                topic['check_groups'] = list(
+                    filter(lambda g: g['start'] >= topic['start'] and g['start'] <= topic['end'], check_groups))
 
-                tasks.append(task)
-                task = {
+                topics.append(topic)
+                topic = {
                     'start': i
                 }
 
-        return tasks
+        return topics
 
     def _move_checkboxes_comments_into_tasks(self):
         def fix_space_groups_bounds(sg: []) -> []:
@@ -236,7 +236,7 @@ class TaskMaster:
                 t['space_groups'] = fix_space_groups_bounds(space_groups)
             pass
 
-        tasks = self._parse_tasks()
+        tasks = self._parse_topics()
         add_space_groups(tasks)
         insertions = []
 
@@ -253,7 +253,7 @@ class TaskMaster:
                 if len(''.join(lines).strip()) == 0:
                     continue
 
-                if len(get_task_title(self._lines[subtask_index]).strip()) == 0:
+                if len(get_topic_title(self._lines[subtask_index]).strip()) == 0:
                     continue
 
                 insertions.append({
@@ -269,8 +269,8 @@ class TaskMaster:
         for insertion in sort_by_end(insertions):
             task_start: int = self._lines.index(insertion['task_line'])
             new_task_lines: [str] = insertion['lines']
-            task = get_task_title(insertion['task_line'])
-            subtask = get_task_title(insertion['subtask_line'])
+            task = get_topic_title(insertion['task_line'])
+            subtask = get_topic_title(insertion['subtask_line'])
             new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
             if new_task_lines[-1].strip() != '':
                 new_task_lines.append('')
@@ -398,9 +398,9 @@ class TaskMaster:
 
             for p in get_parents(task, tasks):
                 address.insert(0, p)
-            address = list(map(lambda e: get_task_title(e), address))
+            address = list(map(lambda e: get_topic_title(e), address))
             if len(address) == 1:
-                address = split_title_to_address(get_task_title(self._lines[start]))
+                address = split_title_to_address(get_topic_title(self._lines[start]))
             return {
                 'lines': lines,
                 'address': address,
@@ -408,7 +408,7 @@ class TaskMaster:
         if self._history_file == '':
             return
 
-        tasks = self._parse_tasks()
+        tasks = self._parse_topics()
         insertions = []
 
         for t in sort_by_end(tasks):
@@ -681,7 +681,7 @@ class TaskMaster:
         return []
 
     def _trim_lines(self):
-        for t in sort_by_end(self._parse_tasks()):
+        for t in sort_by_end(self._parse_topics()):
             i = t['start'] - 1
             if i < 0:
                 continue
@@ -786,8 +786,16 @@ def is_task(line, status: str = None) -> bool:
     return True
 
 
-def get_task_title(str: str) -> str:
-    return str[str.index(']') + 1:].strip()
+def get_topic_title(s: str) -> str:
+    if is_task(s) or is_checkbox(s):
+        t_symbol = ']'
+    else:
+        t_symbol = '#'
+        while s.startswith('##'):
+            s = s.removeprefix('x')
+
+    return s[s.index(t_symbol) + 1:].strip()
+
 
 
 if __name__ == "__main__":
