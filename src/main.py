@@ -71,9 +71,17 @@ def paste_image(file_path: str) -> bool:
     return False
 
 
-def is_checkbox(line: str) -> bool:
+def is_checkbox(line: str, status: str = None) -> bool:
     l = line.lstrip()
-    return len(l) >= 4 and l.startswith('- [') and l[4] == ']'
+    is_checkbox = len(l) >= 4 and l.startswith('- [') and l[4] == ']'
+
+    if not is_checkbox:
+        return False
+
+    if status:
+        return line[len(get_padding(line)) + 3] == status
+
+    return True
 
 
 def checkbox_status_index(line) -> int:
@@ -253,7 +261,7 @@ class TaskMaster:
                 if len(''.join(lines).strip()) == 0:
                     continue
 
-                if len(get_topic_title(self._lines[subtask_index]).strip()) == 0:
+                if len(get_line_title(self._lines[subtask_index]).strip()) == 0:
                     continue
 
                 insertions.append({
@@ -269,8 +277,8 @@ class TaskMaster:
         for insertion in sort_by_end(insertions):
             task_start: int = self._lines.index(insertion['task_line'])
             new_task_lines: [str] = insertion['lines']
-            task = get_topic_title(insertion['task_line'])
-            subtask = get_topic_title(insertion['subtask_line'])
+            task = get_line_title(insertion['task_line'])
+            subtask = get_line_title(insertion['subtask_line'])
             new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
             if new_task_lines[-1].strip() != '':
                 new_task_lines.append('')
@@ -398,9 +406,9 @@ class TaskMaster:
 
             for p in get_parents(task, tasks):
                 address.insert(0, p)
-            address = list(map(lambda e: get_topic_title(e), address))
+            address = list(map(lambda e: get_line_title(e), address))
             if len(address) == 1:
-                address = split_title_to_address(get_topic_title(self._lines[start]))
+                address = split_title_to_address(get_line_title(self._lines[start]))
             return {
                 'lines': lines,
                 'address': address,
@@ -419,7 +427,14 @@ class TaskMaster:
             if not is_task(task_title, status='x'):
                 continue
 
-            insertions.append(get_insertion_specs(t))
+            specs = get_insertion_specs(t)
+            insertions.append(specs)
+            checkbox_line = self._find_checkbox_by_address(specs['address'])
+            if checkbox_line >= 0:
+                index = checkbox_status_index(self._lines[checkbox_line])
+                if self._lines[checkbox_line][index] == '^':
+                    self._update(checkbox_line, self._lines[checkbox_line][:index] + 'x' + self._lines[checkbox_line][index + 1:])
+
             self._remove(start, end)
 
         overall_insertions = 0
@@ -654,7 +669,6 @@ class TaskMaster:
             if line[status] != 'x':
                 continue
 
-            print(topic, line)
             links = self._gather_links(line)
 
             if len(links) == 0:
@@ -718,6 +732,31 @@ class TaskMaster:
         if len(history_lines) == 0:
             history_lines.append('')
         return history_lines
+
+    def _find_checkbox_by_address(self, address: []) -> int:
+        checkbox_topics = list(address[0:-1])
+        checkbox_title = address[-1]
+        parent_topic_start = -1
+        parent_topic_end = -1
+        topics = self._parse_topics()
+
+        while len(checkbox_topics) > 0:
+            target = checkbox_topics.pop(0)
+            for t in topics:
+                start = t['start']
+                if get_line_title(self._lines[start]) == target and start > parent_topic_start:
+                    parent_topic_start = start
+                    parent_topic_end = t['end']
+                    break
+
+        if len(checkbox_topics) > 0:
+            return -1
+
+        for i in range(parent_topic_start, parent_topic_end + 1):
+            line = self._lines[i]
+            if is_checkbox(line) and get_line_title(line) == checkbox_title:
+                return i
+        return 0
 
 
 def _insert_all(dst: [str], index: int, lines: [str]):
@@ -786,7 +825,7 @@ def is_task(line, status: str = None) -> bool:
     return True
 
 
-def get_topic_title(s: str) -> str:
+def get_line_title(s: str) -> str:
     if is_task(s) or is_checkbox(s):
         t_symbol = ']'
     else:
