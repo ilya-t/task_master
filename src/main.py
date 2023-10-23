@@ -831,7 +831,7 @@ def get_line_title(s: str) -> str:
     else:
         t_symbol = '#'
         while s.startswith('##'):
-            s = s.removeprefix('x')
+            s = s.removeprefix('#')
 
     return s[s.index(t_symbol) + 1:].strip()
 
