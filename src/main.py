@@ -244,7 +244,7 @@ class TaskMaster:
                 t['space_groups'] = fix_space_groups_bounds(space_groups)
             pass
 
-        tasks = self._parse_topics()
+        tasks = self.exclude_unused_files_topic(self._parse_topics())
         add_space_groups(tasks)
         insertions = []
 
@@ -301,8 +301,8 @@ class TaskMaster:
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
         self._inject_extra_checkboxes()
-        self._update_checkboxes_status()
         self._move_completed_tasks()
+        self._update_checkboxes_status()
         self._process_links()
         self._trim_lines()
 
@@ -757,6 +757,15 @@ class TaskMaster:
             if is_checkbox(line) and get_line_title(line) == checkbox_title:
                 return i
         return 0
+
+    def exclude_unused_files_topic(self, topics: [{}]) -> [{}]:
+        results = []
+        for t in topics:
+            if self._lines[t['start']] == UNUSED_FILES:
+                continue
+            results.append(t)
+        return results
+
 
 
 def _insert_all(dst: [str], index: int, lines: [str]):
