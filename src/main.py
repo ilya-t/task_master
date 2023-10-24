@@ -563,7 +563,7 @@ class TaskMaster:
                 filename = 'untitled'
             return filename
 
-        def process_hyperlinks(hyperlinks: []):
+        def process_hyperlinks(line_index: int, hyperlinks: []):
             for match in hyperlinks:
                 markdown_text = match['full_link']
                 is_picture_ref = markdown_text.startswith('!')
@@ -581,7 +581,7 @@ class TaskMaster:
                 processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
 
                 if not is_picture_ref and title.startswith('`') and title.endswith('`'):
-                    processed_link = self._process_shell_request(title, link)
+                    processed_link = self._process_shell_request(line_index, title, link)
                 elif generate_file:
                     if is_picture_ref:
                         if not paste_image(abs_link):
@@ -603,7 +603,7 @@ class TaskMaster:
         used_links = set()
 
         for i, line in enumerate(self._lines):
-            line_links = process_hyperlinks(self._gather_links(line))
+            line_links = process_hyperlinks(i, self._gather_links(line))
 
             for h in sort_by_end(line_links):
                 new_link = h.get('processed_link', None)
@@ -826,18 +826,22 @@ class TaskMaster:
                 self._move_checkboxes_subtasks_into_tasks()
                 return
 
-    def _process_shell_request(self, title: str, link: str) -> str:
+    def _process_shell_request(self, line_index: int, title: str, link: str) -> str:
         if len(link.strip()) == 0:
             dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
             write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
-            lines = [raw_cmd]
+            lines = []
+
             bashrc = python_script_path + './bashrc'
             if os.path.exists(bashrc):
                 lines.extend(read_lines(bashrc))
 
+            lines.append('set -e')
+            # TODO: lines.extend(find_dive_in_block(line_index))
+            lines.append(raw_cmd)
             write_lines(script_path, lines)
             cmd = f'/bin/bash {script_path} &> {dst} &'
             os.system(cmd)
