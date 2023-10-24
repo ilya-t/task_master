@@ -28,7 +28,11 @@ def get_config_files(config_file: str) -> str:
 def get_padding(line: str) -> str:
     if len(line) == 0:
         return ''
-    return line[:line.index('- [')]
+    try:
+        return line[:line.index('- [')]
+    except ValueError:
+        return ''
+
 
 
 def current_timestamp() -> int:
@@ -89,6 +93,19 @@ def checkbox_status_index(line) -> int:
         return -1
 
     return len(get_padding(line)) + 3
+
+
+def distinct_ranges_list(ranges: [{}]) -> [{}]:
+    keys = set()
+    results = []
+
+    for r in ranges:
+        key = f'{r["start"]}/{r["end"]}'
+        if key in keys:
+            continue
+        keys.add(key)
+        results.append(r)
+    return results
 
 
 class TaskMaster:
@@ -190,8 +207,8 @@ class TaskMaster:
                     topic['end'] = i
                 else:
                     topic['end'] = i - 1
-                topic['check_groups'] = list(
-                    filter(lambda g: g['start'] >= topic['start'] and g['start'] <= topic['end'], check_groups))
+                topic_groups = filter(lambda g: g['start'] >= topic['start'] and g['start'] <= topic['end'], check_groups)
+                topic['check_groups'] = distinct_ranges_list(topic_groups)
 
                 topics.append(topic)
                 topic = {
@@ -300,6 +317,7 @@ class TaskMaster:
         self._untitled_to_tasks()
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
+        self._move_checkboxes_subtasks_into_tasks()
         self._inject_extra_checkboxes()
         self._move_completed_tasks()
         self._update_checkboxes_status()
@@ -766,6 +784,56 @@ class TaskMaster:
             results.append(t)
         return results
 
+    def _move_checkboxes_subtasks_into_tasks(self):
+        tasks = self.exclude_unused_files_topic(self._parse_topics())
+
+        for t in sort_by_start(tasks):
+            nested_groups = as_nested_dict(t['check_groups'])
+            if len(nested_groups) == 0:
+                continue
+
+            root_group = nested_groups[0]
+            start = root_group['start']
+            end = root_group['end']
+
+            extract_start = None
+            extract_end = None
+            extract_group_padding = None
+
+            for i in range(start, end+1):
+                if extract_start:
+                    subtasks_stopped = len(get_padding(self._lines[i])) <= len(extract_group_padding)
+
+                    if subtasks_stopped:
+                        break
+
+                    extract_end = i
+                else:
+                    line = self._lines[i]
+                    if not is_checkbox(line, status='^'):
+                        continue
+
+                    if len(self._lines) - 1 < i + 1:
+                        continue
+
+                    extract_group_padding = get_padding(self._lines[i])
+                    no_need_to_extract = len(get_padding(self._lines[i + 1])) <= len(extract_group_padding)
+
+                    if no_need_to_extract:
+                        continue
+
+                    extract_start = i + 1
+
+            if extract_start and extract_end:
+                insertion_lines = [
+                    '# [ ] ' + get_line_title(self._lines[t['start']]) + ' -> ' + get_line_title(self._lines[extract_start - 1]),
+                ]
+                padding = get_padding(self._lines[extract_start])
+                insertion_lines.extend(map(lambda e: e.removeprefix(padding), self._lines[extract_start:extract_end+1]))
+                self._remove(extract_start, extract_end)
+                self._insert_all(t['start'], insertion_lines)
+                self._move_checkboxes_subtasks_into_tasks()
+                return
 
 
 def _insert_all(dst: [str], index: int, lines: [str]):
@@ -811,6 +879,10 @@ def to_abs_path(config_file: str, src_path: str) -> str:
 
 def sort_by_end(a: []) -> []:
     return sorted(a, key=lambda x: x['end'], reverse=True)
+
+
+def sort_by_start(ranges: [{}]) -> [{}]:
+    return sorted(ranges, key=lambda x: x['start'])
 
 
 def log(message: str) -> None:
