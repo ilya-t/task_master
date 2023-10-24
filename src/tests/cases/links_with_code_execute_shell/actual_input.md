@@ -1,4 +1,5 @@
 # task notes
 In the result of this test we must execute shell command:
-- [`echo "hello world"`]()
+- [`echo -n "hello " && echo "world"`]()
+- [`sleep`]()
 - ![`echo "hello world"`]()

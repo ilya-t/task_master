@@ -829,9 +829,12 @@ class TaskMaster:
     def _process_shell_request(self, title: str, link: str) -> str:
         if len(link.strip()) == 0:
             dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
+            write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
-            cmd = f'cd {python_script_path} && ./logged_run.sh {dst} {raw_cmd} &'
+            script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
+            write_lines(script_path, lines=[raw_cmd])
+            cmd = f'/bin/bash {script_path} &> {dst} &'
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
