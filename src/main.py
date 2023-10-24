@@ -563,17 +563,6 @@ class TaskMaster:
                 filename = 'untitled'
             return filename
 
-        def increasing_index_file(dst: str) -> str:
-            index = 0
-            parent = os.path.dirname(dst)
-            name, ext = os.path.splitext(os.path.basename(dst))
-            candidate = dst
-            while os.path.exists(candidate):
-                candidate = parent + '/' + name + str(index) + ext
-                index = index + 1
-
-            return candidate
-
         def process_hyperlinks(hyperlinks: []):
             for match in hyperlinks:
                 markdown_text = match['full_link']
@@ -591,7 +580,9 @@ class TaskMaster:
                 abs_link = increasing_index_file(get_config_files(self._config_file) + '/' + file_name + file_ext)
                 processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
 
-                if generate_file:
+                if not is_picture_ref and title.startswith('`') and title.endswith('`'):
+                    processed_link = self._process_shell_request(title, link)
+                elif generate_file:
                     if is_picture_ref:
                         if not paste_image(abs_link):
                             processed_link = '<no image in clipboard>'
@@ -834,6 +825,30 @@ class TaskMaster:
                 self._insert_all(t['start'], insertion_lines)
                 self._move_checkboxes_subtasks_into_tasks()
                 return
+
+    def _process_shell_request(self, title: str, link: str) -> str:
+        if len(link.strip()) == 0:
+            dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            raw_cmd = title.removeprefix('`').removesuffix('`')
+            cmd = f'cd {python_script_path} && ./logged_run.sh {dst} {raw_cmd} &'
+            os.system(cmd)
+            return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
+        else:
+            # TODO: update shell
+            return link
+
+
+def increasing_index_file(dst: str) -> str:
+    index = 0
+    parent = os.path.dirname(dst)
+    name, ext = os.path.splitext(os.path.basename(dst))
+    candidate = dst
+    while os.path.exists(candidate):
+        candidate = parent + '/' + name + str(index) + ext
+        index = index + 1
+
+    return candidate
 
 
 def _insert_all(dst: [str], index: int, lines: [str]):
