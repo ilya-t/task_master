@@ -833,7 +833,12 @@ class TaskMaster:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
-            write_lines(script_path, lines=[raw_cmd])
+            lines = [raw_cmd]
+            bashrc = python_script_path + './bashrc'
+            if os.path.exists(bashrc):
+                lines.extend(read_lines(bashrc))
+
+            write_lines(script_path, lines)
             cmd = f'/bin/bash {script_path} &> {dst} &'
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
