@@ -1,7 +1,6 @@
 import os
 import re
-import typing
-
+import document
 import pyperclip
 import shutil
 import sys
@@ -37,30 +36,6 @@ def get_padding(line: str) -> str:
 
 def current_timestamp() -> int:
     return int(time.time())
-
-
-def write_lines(dst: str, lines: [str]) -> None:
-    parent = os.path.dirname(dst)
-    os.makedirs(parent, exist_ok=True)
-    updated_content = ''.join(map(lambda l: l + '\n', lines))
-    text_file = open(dst, "w")
-    text_file.write(updated_content)
-    text_file.close()
-
-
-def read_lines(src) -> [str]:
-    def remove_trailing_newline(l: str) -> str:
-        if l.endswith('\n'):
-            return l[:-1]
-        return l
-
-    with open(src, 'r') as file:
-        return list(map(remove_trailing_newline, file.readlines()))
-
-
-def trim_trailing_empty_lines(lines: [str]):
-    while len(lines) > 0 and lines[-1].strip() == '':
-        lines.pop(-1)
 
 
 def paste_image(file_path: str) -> bool:
@@ -115,35 +90,34 @@ class TaskMaster:
                  timestamp_provider: Callable[[], int] = current_timestamp,
                  executions_logfile: str = python_script_path + '/executions.log') -> None:
         super().__init__()
-        self._changed = False
         self._timestamp_provider = timestamp_provider
         self._config_file = taskflow_file
         self._history_file = history_file
-        self._lines: [str] = read_lines(self._config_file)
+        self._doc = document.Document(self._config_file)
         self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
         self._executions_logfile = executions_logfile
         self._cached_executions = None
 
     def _untitled_to_tasks(self) -> None:
-        if self._lines[0].startswith('# '):
+        if self._doc.lines()[0].startswith('# '):
             return
 
         datetime_obj = datetime.fromtimestamp(self._timestamp_provider())
         current_time = datetime_obj.strftime('%Y.%m.%d ')
 
-        self._insert(0, '# [ ] ' + current_time)
+        self._doc.insert(0, '# [ ] ' + current_time)
 
     def _insert_setup_template_to_tasks(self):
         await_template = False
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             if line.startswith('# ['):
                 await_template = True
                 continue
 
             if await_template:
                 if line.strip() == '':
-                    self._remove(start=i, end=i)
-                    self._insert_all(i, [
+                    self._doc.remove(start=i, end=i)
+                    self._doc.insert_all(i, [
                         DIVE_TEMPLATE_INTRO,
                         '```sh',
                         DIVE_TEMPLATE_SCRIPT_BODY,
@@ -154,26 +128,26 @@ class TaskMaster:
 
     def _inject_extra_checkboxes(self):
         def can_add_trailing_checkbox(start: int, end: int) -> bool:
-            start_line = self._lines[start]
+            start_line = self._doc.lines()[start]
             group_padding = start_line[:start_line.index('- [')]
             all_completed = True
             if len(group_padding) > 0 and start > 0:
-                nested_group_parent_completed = self._lines[start - 1].strip().startswith('- [x]')
+                nested_group_parent_completed = self._doc.lines()[start - 1].strip().startswith('- [x]')
                 if not nested_group_parent_completed:
                     all_completed = False
 
-            for gl in self._lines[start:end + 1]:
+            for gl in self._doc.lines()[start:end + 1]:
                 if gl.startswith(group_padding + '- [ ]'):
                     all_completed = False
 
             if all_completed:
                 return False
 
-            already_has_trailing_checkbox = self._lines[end].rstrip() == group_padding + '- [ ]'
+            already_has_trailing_checkbox = self._doc.lines()[end].rstrip() == group_padding + '- [ ]'
             if already_has_trailing_checkbox:
                 return False
 
-            if self._lines[start-1] == UNUSED_FILES:
+            if self._doc.lines()[start-1] == UNUSED_FILES:
                 return False
 
             return True
@@ -183,9 +157,9 @@ class TaskMaster:
                 start: int = group['start']
                 end: int = group['end']
                 if can_add_trailing_checkbox(start, end):
-                    line = self._lines[start]
+                    line = self._doc.lines()[start]
                     padding = line[:line.index('- [')]
-                    self._insert(end + 1, padding + '- [ ] ')
+                    self._doc.insert(end + 1, padding + '- [ ] ')
 
                 children = group.get('children', None)
                 if children:
@@ -198,13 +172,13 @@ class TaskMaster:
         check_groups = self._parse_check_groups()
         topics = []
         topic = {}
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             line_is_topic = line.startswith('#')
             if line_is_topic and 'start' not in topic:
                 topic['start'] = i
                 continue
 
-            end_of_file = i == len(self._lines) - 1
+            end_of_file = i == len(self._doc.lines()) - 1
             if 'start' in topic and (line_is_topic or end_of_file):
                 if end_of_file:
                     topic['end'] = i
@@ -226,7 +200,7 @@ class TaskMaster:
                 i: int = s['start']
 
                 while i <= s['end']:
-                    if self._lines[i].startswith('#'):
+                    if self._doc.lines()[i].startswith('#'):
                         s['end'] = i - 1
                         break
                     i += 1
@@ -276,45 +250,34 @@ class TaskMaster:
 
             for s in space_groups:
                 subtask_index = s['start'] - 1
-                group_padding = get_padding(self._lines[subtask_index])
-                lines = list(map(lambda s: s.removeprefix(group_padding), self._lines[s['start']:s['end'] + 1]))
+                group_padding = get_padding(self._doc.lines()[subtask_index])
+                lines = list(map(lambda s: s.removeprefix(group_padding), self._doc.lines()[s['start']:s['end'] + 1]))
                 if len(''.join(lines).strip()) == 0:
                     continue
 
-                if len(get_line_title(self._lines[subtask_index]).strip()) == 0:
+                if len(get_line_title(self._doc.lines()[subtask_index]).strip()) == 0:
                     continue
 
                 insertions.append({
-                    'task_line': self._lines[t['start']],
-                    'subtask_line': self._lines[subtask_index],
+                    'task_line': self._doc.lines()[t['start']],
+                    'subtask_line': self._doc.lines()[subtask_index],
                     'lines': lines,
                     'start': s['start'],
                     'end': s['end'],
                 })
-                self._lines[subtask_index] = self._lines[subtask_index].replace('- [ ]', '- [^]')
-                self._remove(s['start'], s['end'])
+                self._doc.lines()[subtask_index] = self._doc.lines()[subtask_index].replace('- [ ]', '- [^]')
+                self._doc.remove(s['start'], s['end'])
 
         for insertion in sort_by_end(insertions):
-            task_start: int = self._lines.index(insertion['task_line'])
+            task_start: int = self._doc.lines().index(insertion['task_line'])
             new_task_lines: [str] = insertion['lines']
             task = get_line_title(insertion['task_line'])
             subtask = get_line_title(insertion['subtask_line'])
             new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
             if new_task_lines[-1].strip() != '':
                 new_task_lines.append('')
-            self._insert_all(index=task_start, lines=new_task_lines)
+            self._doc.insert_all(index=task_start, lines=new_task_lines)
         pass
-
-    def _remove_line(self, index: int):
-        self._lines.pop(index)
-        self._changed = True
-
-    def _remove(self, start: int, end: int):
-        new_lines = []
-        new_lines.extend(self._lines[:start])
-        new_lines.extend(self._lines[end + 1:])
-        self._lines = new_lines
-        self._changed = True
 
     def execute(self):
         self._untitled_to_tasks()
@@ -327,18 +290,9 @@ class TaskMaster:
         self._process_links()
         self._trim_lines()
 
-        if self._changed:
+        if self._doc.has_changed():
             self._make_defensive_copy()
-            write_lines(dst=self._config_file, lines=self._lines)
-
-    def _insert(self, index: int, line: str):
-        self._lines.insert(index, line)
-        self._changed = True
-
-    def _insert_all(self, index: int, lines: [str]):
-        for l in reversed(lines):
-            self._lines.insert(index, l)
-        self._changed = True
+            self._doc.save()
 
     def _make_defensive_copy(self):
         os.makedirs(self._memories_dir, exist_ok=True)
@@ -348,9 +302,9 @@ class TaskMaster:
     def _parse_check_groups(self) -> []:
         def parse_nested_groups(start: int, end: int) -> None:
             g = None
-            root_padding = len(get_padding(self._lines[start]))
-            group_padding = len(get_padding(self._lines[start]))
-            for i, line in enumerate(self._lines[start:end + 1]):
+            root_padding = len(get_padding(self._doc.lines()[start]))
+            group_padding = len(get_padding(self._doc.lines()[start]))
+            for i, line in enumerate(self._doc.lines()[start:end + 1]):
                 new_padding = len(get_padding(line))
                 if new_padding > group_padding:
                     if not g:
@@ -368,11 +322,11 @@ class TaskMaster:
 
         check_groups = []
         check_group = {}
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             if is_checkbox(line) and 'start' not in check_group:
                 check_group['start'] = i
 
-            end_of_file = i == len(self._lines) - 1
+            end_of_file = i == len(self._doc.lines()) - 1
             if 'start' in check_group and (not is_checkbox(line) or end_of_file):
                 if end_of_file:
                     check_group['end'] = i
@@ -399,16 +353,16 @@ class TaskMaster:
             return level
 
         def get_parents(subtask: {}, tasks: [{}]):
-            subtask_lvl = get_level(self._lines[subtask['start']])
+            subtask_lvl = get_level(self._doc.lines()[subtask['start']])
             results = []
             for t in sort_by_end(tasks):
                 is_below_subtask = t['end'] > subtask['start']
                 if is_below_subtask:
                     continue
-                lvl = get_level(self._lines[t['start']])
+                lvl = get_level(self._doc.lines()[t['start']])
 
                 if lvl < subtask_lvl:
-                    results.append(self._lines[t['start']])
+                    results.append(self._doc.lines()[t['start']])
 
                 if lvl == 1:
                     break
@@ -421,15 +375,15 @@ class TaskMaster:
         def get_insertion_specs(task: {}) -> {}:
             start = task['start']
             end = task['end']
-            lines: [] = self._lines[start + 1:end + 1]
-            trim_trailing_empty_lines(lines)
-            address = [self._lines[start]]
+            lines: [] = self._doc.lines()[start + 1:end + 1]
+            document.trim_trailing_empty_lines(lines)
+            address = [self._doc.lines()[start]]
 
             for p in get_parents(task, tasks):
                 address.insert(0, p)
             address = list(map(lambda e: get_line_title(e), address))
             if len(address) == 1:
-                address = split_title_to_address(get_line_title(self._lines[start]))
+                address = split_title_to_address(get_line_title(self._doc.lines()[start]))
             return {
                 'lines': lines,
                 'address': address,
@@ -443,7 +397,7 @@ class TaskMaster:
         for t in sort_by_end(tasks):
             start = t['start']
             end = t['end']
-            task_title = self._lines[start]
+            task_title = self._doc.lines()[start]
 
             if not is_task(task_title, status='x'):
                 continue
@@ -452,11 +406,11 @@ class TaskMaster:
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
             if checkbox_line >= 0:
-                index = checkbox_status_index(self._lines[checkbox_line])
-                if self._lines[checkbox_line][index] == '^':
-                    self._update(checkbox_line, self._lines[checkbox_line][:index] + 'x' + self._lines[checkbox_line][index + 1:])
+                index = checkbox_status_index(self._doc.lines()[checkbox_line])
+                if self._doc.lines()[checkbox_line][index] == '^':
+                    self._doc.update(checkbox_line, self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][index + 1:])
 
-            self._remove(start, end)
+            self._doc.remove(start, end)
 
         overall_insertions = 0
         for insertion in insertions:
@@ -470,7 +424,7 @@ class TaskMaster:
         for insertion in insertions:
             history_lines = self.insert_topic_to_history(history_lines, insertion)
 
-        write_lines(self._history_file, history_lines)
+        document.write_lines(self._history_file, history_lines)
 
     @staticmethod
     def insert_topic_to_history(history_lines: [str], topic_insertion: [{}]) -> [str]:
@@ -594,7 +548,7 @@ class TaskMaster:
                         lines = []
                         if clip:
                             lines.append(clip)
-                        write_lines(abs_link, lines)
+                        document.write_lines(abs_link, lines)
                 else:
                     processed_link = None
 
@@ -605,7 +559,7 @@ class TaskMaster:
 
         used_links = set()
 
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             line_links = process_hyperlinks(i, self._gather_links(line))
 
             for h in sort_by_end(line_links):
@@ -619,21 +573,16 @@ class TaskMaster:
                         prefix = '!'
                     full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
                     line = line[:h['start']] + full_link + line[h['end']:]
-                    self._update(i, line)
+                    self._doc.update(i, line)
 
         existing_files: [str] = self._gather_existing_files()
         unused_files: [str] = list(filter(lambda f: f not in used_links, existing_files))
         self._prepare_unused(unused_files)
         self._process_unused()
 
-    def _update(self, i, line):
-        self._lines[i] = line
-        self._changed = True
-        pass
-
     def get_unused_files_topic(self) -> {}:
         result = {}
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             if line == UNUSED_FILES:
                 result['start'] = i
                 continue
@@ -645,7 +594,7 @@ class TaskMaster:
         if 'start' not in result:
             return None
         if 'end' not in result:
-            result['end'] = len(self._lines) - 1
+            result['end'] = len(self._doc.lines()) - 1
         return result
 
     def _prepare_unused(self, unused: [str]):
@@ -658,13 +607,13 @@ class TaskMaster:
                 UNUSED_FILES,
                 '',
             ]
-            self._insert_all(0, lines)
+            self._doc.insert_all(0, lines)
             start = 0
         else:
             start = topic['start']
 
         for u in unused:
-            self._insert(start + 1, '- [ ] [complete to delete](' + u + ')')
+            self._doc.insert(start + 1, '- [ ] [complete to delete](' + u + ')')
 
     def _process_unused(self):
         topic = self.get_unused_files_topic()
@@ -673,7 +622,7 @@ class TaskMaster:
 
         config_files = get_config_files(self._config_file)
         for i in reversed(range(topic['start'], topic['end'] + 1)):
-            line = self._lines[i]
+            line = self._doc.lines()[i]
             status = checkbox_status_index(line)
             if status < 0:
                 continue
@@ -696,7 +645,7 @@ class TaskMaster:
                 dst = mem_dir + '/' + os.path.basename(src)
                 shutil.move(src, dst)
                 log(f'moving: {link} -> {dst}')
-            self._remove_line(i)
+            self._doc.remove_line(i)
 
 
     def _gather_existing_files(self) -> [str]:
@@ -712,12 +661,12 @@ class TaskMaster:
             if i < 0:
                 continue
 
-            if len(self._lines[i].strip()) > 0:
-                self._insert(i + 1, '')
-        trim_trailing_empty_lines(self._lines)
+            if len(self._doc.lines()[i].strip()) > 0:
+                self._doc.insert(i + 1, '')
+        self._doc.trim_trailing_empty_lines()
 
     def _update_checkboxes_status(self):
-        for i, line in enumerate(self._lines):
+        for i, line in enumerate(self._doc.lines()):
             index = checkbox_status_index(line)
 
             if index < 0 or line[index] != ' ':
@@ -732,7 +681,7 @@ class TaskMaster:
             if not has_answer:
                 continue
 
-            self._update(i, line[:index] + 'x' + line[index + 1:])
+            self._doc.update(i, line[:index] + 'x' + line[index + 1:])
         pass
 
     def _read_history_file(self) -> []:
@@ -740,7 +689,7 @@ class TaskMaster:
         os.makedirs(parent, exist_ok=True)
         history_lines = []
         if os.path.exists(self._history_file):
-            history_lines = read_lines(self._history_file)
+            history_lines = document.read_lines(self._history_file)
         if len(history_lines) == 0:
             history_lines.append('')
         return history_lines
@@ -756,7 +705,7 @@ class TaskMaster:
             target = checkbox_topics.pop(0)
             for t in topics:
                 start = t['start']
-                if get_line_title(self._lines[start]) == target and start > parent_topic_start:
+                if get_line_title(self._doc.lines()[start]) == target and start > parent_topic_start:
                     parent_topic_start = start
                     parent_topic_end = t['end']
                     break
@@ -765,7 +714,7 @@ class TaskMaster:
             return -1
 
         for i in range(parent_topic_start, parent_topic_end + 1):
-            line = self._lines[i]
+            line = self._doc.lines()[i]
             if is_checkbox(line) and get_line_title(line) == checkbox_title:
                 return i
         return 0
@@ -773,7 +722,7 @@ class TaskMaster:
     def exclude_unused_files_topic(self, topics: [{}]) -> [{}]:
         results = []
         for t in topics:
-            if self._lines[t['start']] == UNUSED_FILES:
+            if self._doc.lines()[t['start']] == UNUSED_FILES:
                 continue
             results.append(t)
         return results
@@ -796,22 +745,22 @@ class TaskMaster:
 
             for i in range(start, end+1):
                 if extract_start:
-                    subtasks_stopped = len(get_padding(self._lines[i])) <= len(extract_group_padding)
+                    subtasks_stopped = len(get_padding(self._doc.lines()[i])) <= len(extract_group_padding)
 
                     if subtasks_stopped:
                         break
 
                     extract_end = i
                 else:
-                    line = self._lines[i]
+                    line = self._doc.lines()[i]
                     if not is_checkbox(line, status='^'):
                         continue
 
-                    if len(self._lines) - 1 < i + 1:
+                    if len(self._doc.lines()) - 1 < i + 1:
                         continue
 
-                    extract_group_padding = get_padding(self._lines[i])
-                    no_need_to_extract = len(get_padding(self._lines[i + 1])) <= len(extract_group_padding)
+                    extract_group_padding = get_padding(self._doc.lines()[i])
+                    no_need_to_extract = len(get_padding(self._doc.lines()[i + 1])) <= len(extract_group_padding)
 
                     if no_need_to_extract:
                         continue
@@ -820,19 +769,19 @@ class TaskMaster:
 
             if extract_start and extract_end:
                 insertion_lines = [
-                    '# [ ] ' + get_line_title(self._lines[t['start']]) + ' -> ' + get_line_title(self._lines[extract_start - 1]),
+                    '# [ ] ' + get_line_title(self._doc.lines()[t['start']]) + ' -> ' + get_line_title(self._doc.lines()[extract_start - 1]),
                 ]
-                padding = get_padding(self._lines[extract_start])
-                insertion_lines.extend(map(lambda e: e.removeprefix(padding), self._lines[extract_start:extract_end+1]))
-                self._remove(extract_start, extract_end)
-                self._insert_all(t['start'], insertion_lines)
+                padding = get_padding(self._doc.lines()[extract_start])
+                insertion_lines.extend(map(lambda e: e.removeprefix(padding), self._doc.lines()[extract_start:extract_end+1]))
+                self._doc.remove(extract_start, extract_end)
+                self._doc.insert_all(t['start'], insertion_lines)
                 self._move_checkboxes_subtasks_into_tasks()
                 return
 
     def _process_shell_request(self, line_index: int, title: str, link: str) -> str:
         if len(link.strip()) == 0:
             dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
-            write_lines(dst, lines=['<waiting for output>'])
+            document.write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
@@ -840,12 +789,12 @@ class TaskMaster:
 
             bashrc = python_script_path + './bashrc'
             if os.path.exists(bashrc):
-                script_lines.extend(read_lines(bashrc))
+                script_lines.extend(document.read_lines(bashrc))
 
             # TODO: lines.extend(find_dive_in_block(line_index))
             script_lines.append(raw_cmd)
             script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
-            write_lines(script_path, script_lines)
+            document.write_lines(script_path, script_lines)
             cmd = f'/bin/bash {script_path} &> {dst} &'
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
@@ -881,7 +830,7 @@ class TaskMaster:
                 'status': file_and_status[1],
             }
 
-        self._cached_executions = list(map(parse_line, read_lines(abs_path)))
+        self._cached_executions = list(map(parse_line, document.read_lines(abs_path)))
         return self._cached_executions
 
     def _remove_execution_results(self, link: str):
@@ -893,8 +842,8 @@ class TaskMaster:
             is_same = s.split(':')[0].endswith(link.removeprefix('.'))
             return not is_same
 
-        lines = list(filter(keep_execution, read_lines(abs_path)))
-        write_lines(abs_path, lines)
+        lines = list(filter(keep_execution, document.read_lines(abs_path)))
+        document.write_lines(abs_path, lines)
 
 
 def increasing_index_file(dst: str) -> str:
@@ -988,7 +937,6 @@ def get_line_title(s: str) -> str:
             s = s.removeprefix('#')
 
     return s[s.index(t_symbol) + 1:].strip()
-
 
 
 if __name__ == "__main__":
