@@ -112,7 +112,8 @@ class TaskMaster:
     def __init__(self,
                  taskflow_file: str,
                  history_file: str,
-                 timestamp_provider: Callable[[], int] = current_timestamp) -> None:
+                 timestamp_provider: Callable[[], int] = current_timestamp,
+                 executions_logfile: str = python_script_path + '/executions.log') -> None:
         super().__init__()
         self._changed = False
         self._timestamp_provider = timestamp_provider
@@ -120,6 +121,8 @@ class TaskMaster:
         self._history_file = history_file
         self._lines: [str] = read_lines(self._config_file)
         self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
+        self._executions_logfile = executions_logfile
+        self._cached_executions = None
 
     def _untitled_to_tasks(self) -> None:
         if self._lines[0].startswith('# '):
@@ -833,22 +836,65 @@ class TaskMaster:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
-            lines = []
+            script_lines = []
 
             bashrc = python_script_path + './bashrc'
             if os.path.exists(bashrc):
-                lines.extend(read_lines(bashrc))
+                script_lines.extend(read_lines(bashrc))
 
-            lines.append('set -e')
             # TODO: lines.extend(find_dive_in_block(line_index))
-            lines.append(raw_cmd)
-            write_lines(script_path, lines)
+            script_lines.append(raw_cmd)
+            script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
+            write_lines(script_path, script_lines)
             cmd = f'/bin/bash {script_path} &> {dst} &'
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
-            # TODO: update shell
+            executions = self._get_shell_executions()
+            for e in reversed(executions):
+                if e['file'].endswith(link.removeprefix('.')): # TODO: not precise file detection
+                    status: str = e['status']
+                    if not status.isdigit():
+                        continue
+
+                    name, ext = os.path.splitext(os.path.basename(link))
+                    new_name = f'{name}-retcode={status}{ext}'
+
+                    src = to_abs_path(self._config_file, link)
+                    dst = os.path.dirname(src) + '/' + new_name
+                    shutil.move(src, dst)
+                    self._remove_execution_results(link)
+                    return link.removesuffix(os.path.basename(link)) + new_name
             return link
+
+    def _get_shell_executions(self) -> [{}]:
+        if self._cached_executions:
+            return self._cached_executions
+        abs_path = to_abs_path(self._config_file, self._executions_logfile)
+        if not os.path.exists(abs_path):
+            return []
+
+        def parse_line(s: str) -> {}:
+            file_and_status = s.split(':')
+            return {
+                'file': file_and_status[0],
+                'status': file_and_status[1],
+            }
+
+        self._cached_executions = list(map(parse_line, read_lines(abs_path)))
+        return self._cached_executions
+
+    def _remove_execution_results(self, link: str):
+        abs_path = to_abs_path(self._config_file, self._executions_logfile)
+        if not os.path.exists(abs_path):
+            return
+
+        def keep_execution(s: str) -> bool:
+            is_same = s.split(':')[0].endswith(link.removeprefix('.'))
+            return not is_same
+
+        lines = list(filter(keep_execution, read_lines(abs_path)))
+        write_lines(abs_path, lines)
 
 
 def increasing_index_file(dst: str) -> str:

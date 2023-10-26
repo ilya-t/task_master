@@ -50,6 +50,7 @@ class TestTaskMaster(unittest.TestCase):
         test_output = case_path + '/test_output.md'
         test_files = main.get_config_files(test_output)
         test_archive = case_path + '/test_archive.md'
+        test_executions = case_path + '/test_executions.log'
 
         prepare_artifact(src=case_path + '/actual_input.md',
                          dst=test_output)
@@ -60,9 +61,13 @@ class TestTaskMaster(unittest.TestCase):
         prepare_artifact(src=case_path + '/actual_archive.md',
                          dst=test_archive)
 
+        prepare_artifact(src=case_path + '/actual_executions.log',
+                         dst=test_executions)
+
         main.TaskMaster(taskflow_file=test_output,
                         history_file=test_archive,
-                        timestamp_provider=test_time).execute()
+                        timestamp_provider=test_time,
+                        executions_logfile=test_executions).execute()
 
         self.assertEqual(
             read_file(case_path + '/expected_output.md'),
@@ -80,6 +85,12 @@ class TestTaskMaster(unittest.TestCase):
             self.compare_directories(
                 case_path + '/expected_output.files',
                 case_path + '/test_output.files',
+            )
+
+        if os.path.exists(case_path + '/expected_executions.log'):
+            self.assertEqual(
+                read_file(case_path + '/expected_executions.log'),
+                read_file(test_executions),
             )
 
     def compare_directories(self, expected_dir, actual_dir):
