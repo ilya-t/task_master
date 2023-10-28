@@ -117,8 +117,11 @@ class Document:
         check_groups = self.get_check_groups()
         topics = []
         topic = {}
+        in_code_block = False
         for i, line in enumerate(self._lines):
-            line_is_topic = line.startswith('#')
+            if line.startswith('```'):
+                in_code_block = not in_code_block
+            line_is_topic = line.startswith('#') and not in_code_block
             if line_is_topic and 'start' not in topic:
                 topic['start'] = i
                 continue
@@ -129,7 +132,7 @@ class Document:
                     topic['end'] = i
                 else:
                     topic['end'] = i - 1
-                topic_groups = filter(lambda g: g['start'] >= topic['start'] and g['start'] <= topic['end'], check_groups)
+                topic_groups = filter(lambda g: topic['start'] <= g['start'] <= topic['end'], check_groups)
                 topic['check_groups'] = _distinct_ranges_list(topic_groups)
 
                 topics.append(topic)
