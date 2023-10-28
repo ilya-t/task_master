@@ -1,0 +1,29 @@
+# in-progress
+- [x] task#1
+- [ ] task#2
+    - [^] task#2.1?
+    - [x] task#2.2: [`some`](./test_input.files/cmd.log)
+    - [x] task#2.2
+        - [x] task#2.2.1
+        - [x] task#2.2.2
+    - [x] task#2.3
+        - [x] task#2.3.1
+        - [x] task#2.3.2
+        - [x] task#2.3.3
+    - [ ] task#2.4:
+        - [ ] task#2.4.1
+            - [ ] task#2.4.1.1
+                - [ ] task#2.4.1.1.1
+                - [ ] task#2.4.1.1.2
+        - [ ] 
+    - [ ] task#2.5:
+        - [^] task#2.5.1
+        - [-] task#2.5.2
+            - [-] task#2.5.5.1? - yes
+            - [ ] 
+        - [ ] 
+    - [ ] 
+- [ ] task#2.6
+    - [ ] task#2.6.1?
+    - [ ] 
+- [ ] 
