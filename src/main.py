@@ -7,6 +7,8 @@ import sys
 import time
 import uuid
 from datetime import datetime
+from document import get_padding
+from document import is_checkbox
 from typing import Callable
 
 from PIL import ImageGrab  # pip install pillow==10.0.0
@@ -22,16 +24,6 @@ UNUSED_FILES = '# unused local files'
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
     return os.path.dirname(config_file) + '/' + name + '.files'
-
-
-def get_padding(line: str) -> str:
-    if len(line) == 0:
-        return ''
-    try:
-        return line[:line.index('- [')]
-    except ValueError:
-        return ''
-
 
 
 def current_timestamp() -> int:
@@ -50,37 +42,11 @@ def paste_image(file_path: str) -> bool:
     return False
 
 
-def is_checkbox(line: str, status: str = None) -> bool:
-    l = line.lstrip()
-    is_checkbox = len(l) >= 4 and l.startswith('- [') and l[4] == ']'
-
-    if not is_checkbox:
-        return False
-
-    if status:
-        return line[len(get_padding(line)) + 3] == status
-
-    return True
-
-
 def checkbox_status_index(line) -> int:
     if not is_checkbox(line):
         return -1
 
     return len(get_padding(line)) + 3
-
-
-def distinct_ranges_list(ranges: [{}]) -> [{}]:
-    keys = set()
-    results = []
-
-    for r in ranges:
-        key = f'{r["start"]}/{r["end"]}'
-        if key in keys:
-            continue
-        keys.add(key)
-        results.append(r)
-    return results
 
 
 class TaskMaster:
@@ -165,34 +131,8 @@ class TaskMaster:
                 if children:
                     try_insert_checkboxes(children)
 
-        check_groups = as_nested_dict(self._parse_check_groups())
+        check_groups = as_nested_dict(self._doc.get_check_groups())
         try_insert_checkboxes(check_groups)
-
-    def _parse_topics(self) -> {}:
-        check_groups = self._parse_check_groups()
-        topics = []
-        topic = {}
-        for i, line in enumerate(self._doc.lines()):
-            line_is_topic = line.startswith('#')
-            if line_is_topic and 'start' not in topic:
-                topic['start'] = i
-                continue
-
-            end_of_file = i == len(self._doc.lines()) - 1
-            if 'start' in topic and (line_is_topic or end_of_file):
-                if end_of_file:
-                    topic['end'] = i
-                else:
-                    topic['end'] = i - 1
-                topic_groups = filter(lambda g: g['start'] >= topic['start'] and g['start'] <= topic['end'], check_groups)
-                topic['check_groups'] = distinct_ranges_list(topic_groups)
-
-                topics.append(topic)
-                topic = {
-                    'start': i
-                }
-
-        return topics
 
     def _move_checkboxes_comments_into_tasks(self):
         def fix_space_groups_bounds(sg: []) -> []:
@@ -238,7 +178,7 @@ class TaskMaster:
                 t['space_groups'] = fix_space_groups_bounds(space_groups)
             pass
 
-        tasks = self.exclude_unused_files_topic(self._parse_topics())
+        tasks = self.exclude_unused_files_topic(self._doc.get_topics())
         add_space_groups(tasks)
         insertions = []
 
@@ -299,51 +239,6 @@ class TaskMaster:
         shutil.copy(self._config_file, self._memories_dir + '/' + os.path.basename(self._config_file))
         pass
 
-    def _parse_check_groups(self) -> []:
-        def parse_nested_groups(start: int, end: int) -> None:
-            g = None
-            root_padding = len(get_padding(self._doc.lines()[start]))
-            group_padding = len(get_padding(self._doc.lines()[start]))
-            for i, line in enumerate(self._doc.lines()[start:end + 1]):
-                new_padding = len(get_padding(line))
-                if new_padding > group_padding:
-                    if not g:
-                        g = {'start': start + i}
-                        group_padding = new_padding
-                    parse_nested_groups(start + i, end)
-                if new_padding < group_padding:
-                    if g:
-                        g['end'] = start + i - 1
-                        nested_groups.append(g)
-                        group_padding = root_padding
-                    g = None
-                if new_padding < root_padding:
-                    return
-
-        check_groups = []
-        check_group = {}
-        for i, line in enumerate(self._doc.lines()):
-            if is_checkbox(line) and 'start' not in check_group:
-                check_group['start'] = i
-
-            end_of_file = i == len(self._doc.lines()) - 1
-            if 'start' in check_group and (not is_checkbox(line) or end_of_file):
-                if end_of_file:
-                    check_group['end'] = i
-                else:
-                    check_group['end'] = i - 1
-
-                check_groups.append(check_group)
-                check_group = {}
-
-        nested_groups = []
-        for group in check_groups:
-            start: int = group['start']
-            parse_nested_groups(start, group['end'])
-
-        check_groups.extend(nested_groups)
-        return check_groups
-
     def _move_completed_tasks(self):
         def get_level(line: str) -> int:
             level = 0
@@ -391,7 +286,7 @@ class TaskMaster:
         if self._history_file == '':
             return
 
-        tasks = self._parse_topics()
+        tasks = self._doc.get_topics()
         insertions = []
 
         for t in sort_by_end(tasks):
@@ -656,7 +551,7 @@ class TaskMaster:
         return []
 
     def _trim_lines(self):
-        for t in sort_by_end(self._parse_topics()):
+        for t in sort_by_end(self._doc.get_topics()):
             i = t['start'] - 1
             if i < 0:
                 continue
@@ -699,7 +594,7 @@ class TaskMaster:
         checkbox_title = address[-1]
         parent_topic_start = -1
         parent_topic_end = -1
-        topics = self._parse_topics()
+        topics = self._doc.get_topics()
 
         while len(checkbox_topics) > 0:
             target = checkbox_topics.pop(0)
@@ -728,7 +623,7 @@ class TaskMaster:
         return results
 
     def _move_checkboxes_subtasks_into_tasks(self):
-        tasks = self.exclude_unused_files_topic(self._parse_topics())
+        tasks = self.exclude_unused_files_topic(self._doc.get_topics())
 
         for t in sort_by_start(tasks):
             nested_groups = as_nested_dict(t['check_groups'])
