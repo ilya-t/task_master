@@ -541,6 +541,9 @@ class TaskMaster:
                 shutil.move(src, dst)
                 log(f'moving: {link} -> {dst}')
             self._doc.remove_line(i)
+        topic = self.get_unused_files_topic()
+        if topic['start'] == topic['end'] - 1:
+            self._doc.remove(topic['start'], topic['end'])
 
 
     def _gather_existing_files(self) -> [str]:
