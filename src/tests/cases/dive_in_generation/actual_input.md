@@ -6,10 +6,14 @@ There is no space for dive-in!
 I left space for dive-in
 - bullet #1
 
+# [ ] dive-in already exists -> sub-dive
+
+expecting dive-in inheritance from parent.
+
 # [ ] dive-in already exists
 dive-in:
 ```sh
-git checkout existing_branch
+echo "hello world"
 ```
 
 - bullet #1

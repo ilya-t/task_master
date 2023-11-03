@@ -9,10 +9,16 @@ git checkout branch_name
 I left space for dive-in
 - bullet #1
 
+# [ ] dive-in already exists -> sub-dive
+dive-in:
+```sh
+echo "hello world"
+```
+expecting dive-in inheritance from parent.
+
 # [ ] dive-in already exists
 dive-in:
 ```sh
-git checkout existing_branch
+echo "hello world"
 ```
-
 - bullet #1
