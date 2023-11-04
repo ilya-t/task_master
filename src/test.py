@@ -97,10 +97,16 @@ class TestTaskMaster(unittest.TestCase):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
 
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
+
+        def file_diff(file: str) -> str:
+            actual = read_file(f'{actual_dir}/{file}').replace('\n', '\\n')
+            expected = read_file(f'{expected_dir}/{file}').replace('\n', '\\n')
+            return f'{file}\n   Want: "{expected}"\n    Got: "{actual}")'
+
+        diff_files = map(file_diff, comparison.diff_files)
         self.assertEqual(0, diff, '\n'.join([
             "The directories are not equal. Differences:",
-            "Common Files:", '\n'.join(comparison.common_files),
-            "Different Files:", '\n'.join(comparison.diff_files),
+            "Different Files:", '\n'.join(diff_files),
             "Files only in the expected directory:", '\n'.join(comparison.left_only),
             "Files only in the actual directory:", '\n'.join(comparison.right_only),
         ]))
