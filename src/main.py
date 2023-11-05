@@ -42,13 +42,6 @@ def paste_image(file_path: str) -> bool:
     return False
 
 
-def checkbox_status_index(line) -> int:
-    if not is_checkbox(line):
-        return -1
-
-    return len(get_padding(line)) + 3
-
-
 class TaskMaster:
     def __init__(self,
                  taskflow_file: str,
@@ -74,22 +67,44 @@ class TaskMaster:
         self._doc.insert(0, '# [ ] ' + current_time)
 
     def _insert_setup_template_to_tasks(self):
-        await_template = False
-        for i, line in enumerate(self._doc.lines()):
-            if line.startswith('# ['):
-                await_template = True
+        def find_parent_dive_in_block(index: int) -> []:
+            topic = self._doc.get_topic_by_line(index)
+            if not topic:
+                return None
+
+            title = self._doc.lines()[topic['start']]
+            parent = split_title_to_address(document.get_line_title(title))[0]
+            parent_topic = self._doc.get_topic_by_title(parent)
+
+            if not parent_topic:
+                return None
+
+            return self._find_dive_in_block(parent_topic)
+
+        for topic in sort_by_end(self._doc.get_topics()):
+            if self._doc.lines()[topic['start']] == UNUSED_FILES:
                 continue
 
-            if await_template:
-                if line.strip() == '':
-                    self._doc.remove(start=i, end=i)
-                    self._doc.insert_all(i, [
-                        DIVE_TEMPLATE_INTRO,
-                        '```sh',
-                        DIVE_TEMPLATE_SCRIPT_BODY,
-                        '```',
-                    ])
-                await_template = False
+            i = topic['start'] + 1
+            line = self._doc.lines()[i]
+
+            if line.strip() != '':
+                continue
+
+            self._doc.remove(start=i, end=i)
+            template = [
+                DIVE_TEMPLATE_INTRO,
+                '```sh',
+            ]
+
+            parent_dive_in = find_parent_dive_in_block(i)
+            if parent_dive_in:
+                template.extend(parent_dive_in)
+            else:
+                template.append(DIVE_TEMPLATE_SCRIPT_BODY)
+            template.append('```')
+
+            self._doc.insert_all(i, template)
         pass
 
     def _inject_extra_checkboxes(self):
@@ -195,7 +210,7 @@ class TaskMaster:
                 if len(''.join(lines).strip()) == 0:
                     continue
 
-                if len(get_line_title(self._doc.lines()[subtask_index]).strip()) == 0:
+                if len(document.get_line_title(self._doc.lines()[subtask_index]).strip()) == 0:
                     continue
 
                 insertions.append({
@@ -211,8 +226,8 @@ class TaskMaster:
         for insertion in sort_by_end(insertions):
             task_start: int = self._doc.lines().index(insertion['task_line'])
             new_task_lines: [str] = insertion['lines']
-            task = get_line_title(insertion['task_line'])
-            subtask = get_line_title(insertion['subtask_line'])
+            task = document.get_line_title(insertion['task_line'])
+            subtask = document.get_line_title(insertion['subtask_line'])
             new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
             if new_task_lines[-1].strip() != '':
                 new_task_lines.append('')
@@ -264,9 +279,6 @@ class TaskMaster:
 
             return results
 
-        def split_title_to_address(title: str) -> [str]:
-            return list(map(lambda part: part.strip(), title.split('->')))
-
         def get_insertion_specs(task: {}) -> {}:
             start = task['start']
             end = task['end']
@@ -276,9 +288,9 @@ class TaskMaster:
 
             for p in get_parents(task, tasks):
                 address.insert(0, p)
-            address = list(map(lambda e: get_line_title(e), address))
+            address = list(map(lambda e: document.get_line_title(e), address))
             if len(address) == 1:
-                address = split_title_to_address(get_line_title(self._doc.lines()[start]))
+                address = split_title_to_address(document.get_line_title(self._doc.lines()[start]))
             return {
                 'lines': lines,
                 'address': address,
@@ -294,14 +306,14 @@ class TaskMaster:
             end = t['end']
             task_title = self._doc.lines()[start]
 
-            if not is_task(task_title, status='x'):
+            if not document.is_task(task_title, status='x'):
                 continue
 
             specs = get_insertion_specs(t)
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
             if checkbox_line >= 0:
-                index = checkbox_status_index(self._doc.lines()[checkbox_line])
+                index = document.checkbox_status_index(self._doc.lines()[checkbox_line])
                 if self._doc.lines()[checkbox_line][index] == '^':
                     self._doc.update(checkbox_line, self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][index + 1:])
 
@@ -518,7 +530,7 @@ class TaskMaster:
         config_files = get_config_files(self._config_file)
         for i in reversed(range(topic['start'], topic['end'] + 1)):
             line = self._doc.lines()[i]
-            status = checkbox_status_index(line)
+            status = document.checkbox_status_index(line)
             if status < 0:
                 continue
 
@@ -565,7 +577,7 @@ class TaskMaster:
 
     def _update_checkboxes_status(self):
         for i, line in enumerate(self._doc.lines()):
-            index = checkbox_status_index(line)
+            index = document.checkbox_status_index(line)
 
             if index < 0 or line[index] != ' ':
                 continue
@@ -603,7 +615,7 @@ class TaskMaster:
             target = checkbox_topics.pop(0)
             for t in topics:
                 start = t['start']
-                if get_line_title(self._doc.lines()[start]) == target and start > parent_topic_start:
+                if document.get_line_title(self._doc.lines()[start]) == target and start > parent_topic_start:
                     parent_topic_start = start
                     parent_topic_end = t['end']
                     break
@@ -613,7 +625,7 @@ class TaskMaster:
 
         for i in range(parent_topic_start, parent_topic_end + 1):
             line = self._doc.lines()[i]
-            if is_checkbox(line) and get_line_title(line) == checkbox_title:
+            if is_checkbox(line) and document.get_line_title(line) == checkbox_title:
                 return i
         return 0
 
@@ -667,7 +679,7 @@ class TaskMaster:
 
             if extract_start and extract_end:
                 insertion_lines = [
-                    '# [ ] ' + get_line_title(self._doc.lines()[t['start']]) + ' -> ' + get_line_title(self._doc.lines()[extract_start - 1]),
+                    '# [ ] ' + document.get_line_title(self._doc.lines()[t['start']]) + ' -> ' + document.get_line_title(self._doc.lines()[extract_start - 1]),
                 ]
                 padding = get_padding(self._doc.lines()[extract_start])
                 insertion_lines.extend(map(lambda e: e.removeprefix(padding), self._doc.lines()[extract_start:extract_end+1]))
@@ -748,7 +760,7 @@ class TaskMaster:
         lines = list(filter(keep_execution, document.read_lines(abs_path)))
         document.write_lines(abs_path, lines)
 
-    def _find_dive_in_block(self, topic: {}) -> []:
+    def _find_dive_in_block(self, topic: {}) -> [str]:
         dive_line = topic['start'] + 1
         lines = self._doc.lines()
         if not lines[dive_line].startswith(DIVE_TEMPLATE_INTRO):
@@ -831,31 +843,8 @@ def log(message: str) -> None:
         print(message, file=log_file)
 
 
-def is_task(line, status: str = None) -> bool:
-    line = line.lstrip()
-
-    while line.startswith('#'):
-        line = line.removeprefix('#')
-    line = '-' + line
-    index = checkbox_status_index(line)
-
-    if index < 0:
-        return False
-
-    if status and line[index] != status:
-        return False
-    return True
-
-
-def get_line_title(s: str) -> str:
-    if is_task(s) or is_checkbox(s):
-        t_symbol = ']'
-    else:
-        t_symbol = '#'
-        while s.startswith('##'):
-            s = s.removeprefix('#')
-
-    return s[s.index(t_symbol) + 1:].strip()
+def split_title_to_address(title: str) -> [str]:
+    return list(map(lambda part: part.strip(), title.split('->')))
 
 
 if __name__ == "__main__":

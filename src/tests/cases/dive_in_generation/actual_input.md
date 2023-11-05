@@ -15,5 +15,4 @@ dive-in:
 ```sh
 echo "hello world"
 ```
-
 - bullet #1

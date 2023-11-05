@@ -160,6 +160,13 @@ class Document:
 
         return candidate
 
+    def get_topic_by_title(self, title: str) -> {}:
+        for t in self.get_topics():
+            if get_line_title(self._lines[t['start']]) == title:
+                return t
+
+        return None
+
 
 def _distinct_ranges_list(ranges: [{}]) -> [{}]:
     keys = set()
@@ -199,3 +206,37 @@ def read_lines(src) -> [str]:
 
     with open(src, 'r') as file:
         return list(map(remove_trailing_newline, file.readlines()))
+
+
+def checkbox_status_index(line) -> int:
+    if not is_checkbox(line):
+        return -1
+
+    return len(get_padding(line)) + 3
+
+
+def is_task(line: str, status: str = None) -> bool:
+    line = line.lstrip()
+
+    while line.startswith('#'):
+        line = line.removeprefix('#')
+    line = '-' + line
+    index = checkbox_status_index(line)
+
+    if index < 0:
+        return False
+
+    if status and line[index] != status:
+        return False
+    return True
+
+
+def get_line_title(s: str) -> str:
+    if is_task(s) or is_checkbox(s):
+        t_symbol = ']'
+    else:
+        t_symbol = '#'
+        while s.startswith('##'):
+            s = s.removeprefix('#')
+
+    return s[s.index(t_symbol) + 1:].strip()
