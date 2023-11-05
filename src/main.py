@@ -689,7 +689,12 @@ class TaskMaster:
             if os.path.exists(bashrc):
                 script_lines.extend(document.read_lines(bashrc))
 
-            # TODO: lines.extend(find_dive_in_block(line_index))
+            topic = self._doc.get_topic_by_line(line_index)
+            if topic:
+                block = self._find_dive_in_block(topic)
+                if len(block) > 0:
+                    block.insert(0, 'set -e')
+                script_lines.extend(block)
             script_lines.append(raw_cmd)
             script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
             document.write_lines(script_path, script_lines)
@@ -742,6 +747,22 @@ class TaskMaster:
 
         lines = list(filter(keep_execution, document.read_lines(abs_path)))
         document.write_lines(abs_path, lines)
+
+    def _find_dive_in_block(self, topic: {}) -> []:
+        dive_line = topic['start'] + 1
+        lines = self._doc.lines()
+        if not lines[dive_line].startswith(DIVE_TEMPLATE_INTRO):
+            return []
+        if not lines[dive_line + 1].startswith('```sh'):
+            return []
+
+        result = []
+        for l in lines[dive_line + 2:]:
+            if l.startswith('```'):
+                break
+            result.append(l)
+
+        return result
 
 
 def increasing_index_file(dst: str) -> str:

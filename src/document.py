@@ -142,6 +142,24 @@ class Document:
 
         return topics
 
+    def get_topic_by_line(self, index: int) -> {}:
+        candidate = None
+        for t in self.get_topics():
+
+            if t['start'] > index:
+                continue
+
+            if not candidate:
+                candidate = t
+                continue
+            offset_new = index - t['start']
+            offset_old = index - candidate['start']
+
+            if offset_new < offset_old:
+                candidate = t
+
+        return candidate
+
 
 def _distinct_ranges_list(ranges: [{}]) -> [{}]:
     keys = set()

@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
@@ -95,16 +96,23 @@ class TestTaskMaster(unittest.TestCase):
 
     def compare_directories(self, expected_dir, actual_dir):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
-
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
+        if diff != 0:
+            print('files are not different, giving extra-time to sync!')
+            time.sleep(1)
+            comparison = filecmp.dircmp(expected_dir, actual_dir)
+            diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
+
+        if diff == 0:
+            return
 
         def file_diff(file: str) -> str:
             actual = read_file(f'{actual_dir}/{file}').replace('\n', '\\n')
             expected = read_file(f'{expected_dir}/{file}').replace('\n', '\\n')
-            return f'{file}\n   Want: "{expected}"\n    Got: "{actual}")'
+            return f'{file}\n   Want: "{expected}"\n    Got: "{actual}"'
 
         diff_files = map(file_diff, comparison.diff_files)
-        self.assertEqual(0, diff, '\n'.join([
+        self.fail('\n'.join([
             "The directories are not equal. Differences:",
             "Different Files:", '\n'.join(diff_files),
             "Files only in the expected directory:", '\n'.join(comparison.left_only),
