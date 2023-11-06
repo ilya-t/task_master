@@ -135,8 +135,8 @@ class TaskMaster:
 
         def try_insert_checkboxes(groups: []) -> None:
             for group in sort_by_end(groups):
-                start: int = group['start']
-                end: int = group['end']
+                start: int = group['start'] # target:15
+                end: int = group['end'] # target:16
                 if can_add_trailing_checkbox(start, end):
                     line = self._doc.lines()[start]
                     padding = line[:line.index('- [')]
@@ -146,7 +146,8 @@ class TaskMaster:
                 if children:
                     try_insert_checkboxes(children)
 
-        check_groups = as_nested_dict(self._doc.get_check_groups())
+        groups = self._doc.get_check_groups()
+        check_groups = as_nested_dict(groups)
         try_insert_checkboxes(check_groups)
 
     def _move_checkboxes_comments_into_tasks(self):
@@ -557,7 +558,6 @@ class TaskMaster:
         if topic['start'] == topic['end'] - 1:
             self._doc.remove(topic['start'], topic['end'])
 
-
     def _gather_existing_files(self) -> [str]:
         config_files = get_config_files(self._config_file)
         dir = os.path.basename(config_files)
@@ -795,30 +795,47 @@ def _insert_all(dst: [str], index: int, lines: [str]):
 
 
 def as_nested_dict(intervals: []) -> []:
-    def find_parent(group: {}):
-        candidate = None
-        for g in intervals:
-            if g == group:
-                continue
-            if g['start'] <= group['start'] and g['end'] >= group['end']:
-                if not candidate or (g['end'] - g['start']) < (candidate['end'] - candidate['start']):
-                    candidate = g
+    def find_parent(group: {}, where: {}):
+        if group['start'] >= where['start'] and group['end'] <= where['end']:
+            for c in where.get('children', []):
+                candidate = find_parent(group, c)
+                if candidate:
+                    return candidate
+            return where
+        return None
 
-        return candidate
+    def first_child(group: {}, where: [{}]) -> {}:
+        for child in where:
+            if child['start'] > group['start'] and child['end'] <= group['end']:
+                return child
 
-    root = []
+        return None
+
+    roots = []
 
     for interval in intervals:
-        parent = find_parent(interval)
-        if not parent and interval not in root:
-            root.append(interval)
-            continue
-        children = parent.get('children', [])
+        parent = None
+        for r in roots:
+            parent = find_parent(interval, r)
+            if parent:
+                break
 
-        if interval not in children:
-            children.append(interval)
-            parent['children'] = children
-    return root
+        if not parent:
+            c = first_child(interval, roots)
+            if c:
+                roots.remove(c)
+                children = interval.get('children', [])
+                children.append(c)
+                interval['children'] = children
+            roots.append(interval)
+            continue
+
+        children = parent.get('children', [])
+        children.append(interval)
+        parent['children'] = children
+        # re-balance tree
+        parent['children'] = as_nested_dict(parent['children'])
+    return roots
 
 
 def to_abs_path(config_file: str, src_path: str) -> str:

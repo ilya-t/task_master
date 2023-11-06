@@ -89,6 +89,20 @@ class Document:
                 if new_padding < root_padding:
                     return
 
+        def remove_duplicates(data: [{}]) -> [{}]:
+            seen = set()
+            unique_data = []
+
+            for item in data:
+                # Convert the dictionary to a frozenset to make it hashable
+                frozen_item = frozenset(item.items())
+
+                if frozen_item not in seen:
+                    seen.add(frozen_item)
+                    unique_data.append(item)
+
+            return unique_data
+
         check_groups = []
         check_group = {}
         for i, line in enumerate(self._lines):
@@ -111,6 +125,7 @@ class Document:
             parse_nested_groups(start, group['end'])
 
         check_groups.extend(nested_groups)
+        check_groups = remove_duplicates(check_groups)
         return check_groups
 
     def get_topics(self) -> {}:
