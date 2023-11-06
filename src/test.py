@@ -39,7 +39,7 @@ def get_test_cases() -> [str, str]:
     cases.extend(scan_cases(python_script_path+'/tests/cases'))
     cases.extend(scan_cases(python_script_path+'/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('deletion_of_unused_local_files'), cases))
+    # cases = list(filter(lambda c: c[0].endswith('completed_subtasks_moved_out_to_different_destinations'), cases))
     return cases
 
 
@@ -63,7 +63,17 @@ def prepare_artifact(src: str, dst: str):
 
 class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
-    def test_cases(self, name: str, case_path: str):
+    def test_cases(self, _: str, case_path: str):
+        if os.path.exists(case_path + '/actual_input.md'):
+            self._run_testcase_v1(case_path)
+            return
+        if os.path.isdir(case_path + '/setup') and os.path.isdir(case_path + '/expected'):
+            self._run_testcase_v2(case_path)
+            return
+
+        self.fail('Test has no body!')
+
+    def _run_testcase_v1(self, case_path: str):
         test_output = case_path + '/test_output.md'
         test_files = main.get_config_files(test_output)
         test_archive = case_path + '/test_archive.md'
@@ -103,6 +113,32 @@ class TestTaskMaster(unittest.TestCase):
                 case_path + '/expected_output.files',
                 case_path + '/test_output.files',
             )
+
+        if os.path.exists(case_path + '/expected_executions.log'):
+            self.assertEqual(
+                read_file(case_path + '/expected_executions.log'),
+                read_file(test_executions),
+            )
+
+    def _run_testcase_v2(self, case_path: str):
+        test_dir = case_path + '/actual'
+        prepare_artifact(src=case_path + '/setup', dst=test_dir)
+        test_executions = case_path + '/test_executions.log'
+        prepare_artifact(src=case_path + '/actual_executions.log',
+                         dst=test_executions)
+
+        main.TaskMaster(taskflow_file=test_dir+'/main.md',
+                        history_file=None,
+                        timestamp_provider=test_time,
+                        executions_logfile=test_executions).execute()
+
+        self.assertEqual(
+            read_file(case_path+'/expected/main.md'),
+            read_file(test_dir+'/main.md'),
+        )
+
+        self.compare_directories(expected_dir=case_path+'/expected',
+                                 actual_dir=test_dir)
 
         if os.path.exists(case_path + '/expected_executions.log'):
             self.assertEqual(
