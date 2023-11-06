@@ -830,7 +830,17 @@ class TaskMaster:
         return result
 
     def _resolve_custom_history_file(self, name: str) -> str:
-        return os.path.dirname(self._config_file) + '/' + name
+        doc_dir = os.path.dirname(self._config_file)
+        candidate = doc_dir + '/' + name
+        if os.path.exists(candidate):
+            return candidate
+
+        # for root, dirs, files in os.walk(doc_dir):
+        #     return None
+
+        # go up
+        # os.path.basename(config_dir)
+        return candidate
 
 
 def increasing_index_file(dst: str) -> str:
