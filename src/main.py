@@ -292,6 +292,14 @@ class TaskMaster:
             if len(address) == 1:
                 address = split_title_to_address(document.get_line_title(self._doc.lines()[start]))
 
+            root = address[0]
+            dst = None
+            if root.startswith('[[') and root.endswith(']]'):
+                address.pop(0)
+                dst = root[2:-2]
+                if not dst.lower().endswith('.md'):
+                    dst = dst + '.md'
+
             real_root_level = len(address)
             raw_root_level = document.get_topic_level(self._doc.line(start))
             level_inc = real_root_level - raw_root_level
@@ -309,10 +317,8 @@ class TaskMaster:
                 'address': address,
                 'start': start,
                 'end': end,
+                'file_name': dst,
             }
-
-        if self._history_file == '':
-            return
 
         tasks = self._doc.get_topics()
         insertions = []
@@ -333,7 +339,8 @@ class TaskMaster:
                 if self._doc.lines()[checkbox_line][index] == '^':
                     self._doc.update(checkbox_line, self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][index + 1:])
 
-            self._doc.remove(specs['start'], specs['end'])
+            if self._history_file or specs['file_name']:
+                self._doc.remove(specs['start'], specs['end'])
 
         overall_insertions = 0
         for insertion in insertions:
@@ -342,25 +349,34 @@ class TaskMaster:
         if overall_insertions == 0:
             return
 
-        history_lines = self._read_history_file()
-
         for insertion in insertions:
-            history_lines = self.insert_topic_to_history(history_lines, insertion)
+            history_file = self._history_file
+            custom_dst = insertion.get('file_name', None)
+            if custom_dst:
+                history_file = self._resolve_custom_history_file(custom_dst)
 
-        document.write_lines(self._history_file, history_lines)
+            if not history_file:
+                continue
+
+            d = document.Document(history_file)
+            self.insert_topic_to_history(d, insertion)
+            d.trim_trailing_empty_lines()
+            d.save()
 
     @staticmethod
-    def insert_topic_to_history(history_lines: [str], topic_insertion: [{}]) -> [str]:
+    def insert_topic_to_history(d: document.Document, topic_insertion: [{}]) -> None:
         address = topic_insertion['address']
 
         def get_title(address_index: int) -> str:
+            if len(address) == 0:
+                return None
             return '#' * (address_index + 1) + ' ' + address[address_index]
 
         def get_existing_topic_positions() -> [int]:
             lvl = 0
             positions = []
             title = get_title(lvl)
-            for i, l in enumerate(history_lines):
+            for i, l in enumerate(d.lines()):
                 if l.rstrip() != title:
                     continue
 
@@ -373,7 +389,7 @@ class TaskMaster:
 
         topic_positions = get_existing_topic_positions()
 
-        # add non-existent topics
+        # add non-existent topic titles
         if len(topic_positions) < len(address):
             last_existing_topic_lvl = len(topic_positions)
 
@@ -383,20 +399,39 @@ class TaskMaster:
                 last_existing_topic_lvl += 1
 
             if len(topic_positions) == 0:
-                existing_topic_line = 0
+                topics = d.get_topics()
+                if len(topics) > 0:
+                    existing_topic_line = topics[0]['start']
+                else:
+                    existing_topic_line = len(d.lines())
             else:
                 existing_topic_line = topic_positions[-1] + 1
-            _insert_all(history_lines, existing_topic_line, new_topics)
+
+            if existing_topic_line > len(d.lines()) - 1:
+                if len(d.lines()) > 0 and len(d.lines()[-1].strip()) > 0:
+                    new_topics.insert(0, '')
+                d.extend(new_topics)
+            else:
+                if not d.line(existing_topic_line - 1).startswith('#'):
+                    new_topics.append('')
+                d.insert_all(existing_topic_line, new_topics)
 
         # add topic content
         topic_positions = get_existing_topic_positions()
-        content_insertion_line = topic_positions[-1] + 1
+        if len(topic_positions) == 0:
+            content_insertion_line = 0
+        else:
+            content_insertion_line = topic_positions[-1] + 1
         lines: [str] = topic_insertion['lines']
-        if len(lines[-1].strip()) > 0 and len(history_lines[content_insertion_line].strip()) > 0:
+        not_ending_with_blank = len(lines[-1].strip()) > 0
+
+        if not_ending_with_blank and (len(d.lines()) - 1 < content_insertion_line or len(d.lines()[content_insertion_line].strip()) > 0):
             lines.append('')
 
-        _insert_all(history_lines, content_insertion_line, lines)
-        return history_lines
+        if content_insertion_line > len(d.lines()) - 1:
+            d.extend(lines)
+        else:
+            d.insert_all(content_insertion_line, lines)
 
     def _gather_links(self, markdown_text: str) -> []:
         patterns = [
@@ -609,17 +644,20 @@ class TaskMaster:
             self._doc.update(i, line[:index] + 'x' + line[index + 1:])
         pass
 
-    def _read_history_file(self) -> []:
-        parent = os.path.dirname(self._history_file)
+    @staticmethod
+    def prepare_file(file: str) -> [str]:
+        parent = os.path.dirname(file)
         os.makedirs(parent, exist_ok=True)
         history_lines = []
-        if os.path.exists(self._history_file):
-            history_lines = document.read_lines(self._history_file)
+        if os.path.exists(file):
+            history_lines = document.read_lines(file)
         if len(history_lines) == 0:
             history_lines.append('')
         return history_lines
 
     def _find_checkbox_by_address(self, address: []) -> int:
+        if len(address) == 0:
+            return -1
         checkbox_topics = list(address[0:-1])
         checkbox_title = address[-1]
         parent_topic_start = -1
@@ -790,6 +828,9 @@ class TaskMaster:
             result.append(l)
 
         return result
+
+    def _resolve_custom_history_file(self, name: str) -> str:
+        return os.path.dirname(self._config_file) + '/' + name
 
 
 def increasing_index_file(dst: str) -> str:

@@ -27,7 +27,10 @@ class Document:
     def __init__(self, file: str):
         super().__init__()
         self._file = file
-        self._lines: [str] = read_lines(self._file)
+        if os.path.exists(self._file):
+            self._lines: [str] = read_lines(self._file)
+        else:
+            self._lines: [str] = []
         self._changed = False
 
     def lines(self) -> [str]:
@@ -66,6 +69,8 @@ class Document:
         return self._changed
 
     def save(self):
+        if not self.has_changed():
+            return
         write_lines(dst=self._file, lines=self._lines)
 
     def get_check_groups(self) -> []:
@@ -205,6 +210,13 @@ class Document:
 
     def line(self, index: int) -> str:
         return self._lines[index]
+
+    def extend(self, lines: [str]):
+        if len(lines) == 0:
+            return
+        self._lines.extend(lines)
+        self._changed = True
+        pass
 
 
 def _distinct_ranges_list(ranges: [{}]) -> [{}]:

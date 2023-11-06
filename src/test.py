@@ -163,7 +163,16 @@ class TestTaskMaster(unittest.TestCase):
             expected = read_file(f'{expected_dir}/{file}').replace('\n', '\\n')
             return f'{file}\n   Want: "{expected}"\n    Got: "{actual}"'
 
+        if len(comparison.diff_files) == 1:
+            file = comparison.diff_files[0]
+            self.assertEqual(
+                read_file(f'{expected_dir}/{file}'),
+                read_file(f'{actual_dir}/{file}'),
+                f'File {actual_dir}/{file} is different'
+            )
+
         diff_files = map(file_diff, comparison.diff_files)
+
         self.fail('\n'.join([
             "The directories are not equal. Differences:",
             "Different Files:", '\n'.join(diff_files),
