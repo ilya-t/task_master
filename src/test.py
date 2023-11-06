@@ -20,11 +20,27 @@ def read_file(f: str) -> str:
         return file.read()
 
 
-def get_test_cases() -> [str]:
-    for root, dirs, files in os.walk(python_script_path+'/tests/cases'):
-        # debug filtering
-        # dirs = list(filter(lambda d: 'deletion_of_unused_local_files' == d, dirs))
-        return list(map(lambda d: (d, root+'/'+d), dirs))
+def get_test_cases() -> [str, str]:
+    def dir_to_case(prefix: str, parent: str, dir_name: str) -> (str, str):
+        name = prefix + dir_name
+        path = parent + '/' + dir_name
+        return name, path
+
+    def scan_cases(src: str, prefix: str = '') -> []:
+        r = []
+        for root, dirs, files in os.walk(src):
+            if root != src:
+                continue
+            r.extend(map(lambda d: dir_to_case(prefix, root, d), dirs))
+        return r
+
+    cases = []
+
+    cases.extend(scan_cases(python_script_path+'/tests/cases'))
+    cases.extend(scan_cases(python_script_path+'/tests/future', prefix='NOT SUPPORTED YET!'))
+    # debug filtering
+    # cases = list(filter(lambda c: c[0].endswith('deletion_of_unused_local_files'), cases))
+    return cases
 
 
 def test_time() -> int:
