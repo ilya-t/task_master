@@ -835,11 +835,10 @@ class TaskMaster:
         if os.path.exists(candidate):
             return candidate
 
-        # for root, dirs, files in os.walk(doc_dir):
-        #     return None
-
-        # go up
-        # os.path.basename(config_dir)
+        for root, dirs, files in os.walk(doc_dir):
+            for f in files:
+                if f.lower() == name.lower():
+                    return root + '/' + f
         return candidate
 
 

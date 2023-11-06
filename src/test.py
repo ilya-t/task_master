@@ -112,6 +112,7 @@ class TestTaskMaster(unittest.TestCase):
             self.compare_directories(
                 case_path + '/expected_output.files',
                 case_path + '/test_output.files',
+                retry_scan = os.path.exists(test_executions),
             )
 
         if os.path.exists(case_path + '/expected_executions.log'):
@@ -127,18 +128,14 @@ class TestTaskMaster(unittest.TestCase):
         prepare_artifact(src=case_path + '/actual_executions.log',
                          dst=test_executions)
 
-        executable = 'main.md'
-        if not os.path.exists(test_dir + '/' + executable):
-            executable = 'main/'+executable
-
-        main.TaskMaster(taskflow_file=test_dir + '/' + executable,
+        main.TaskMaster(taskflow_file=test_dir + '/main.md',
                         history_file=None,
                         timestamp_provider=test_time,
                         executions_logfile=test_executions).execute()
 
         self.assertEqual(
-            read_file(case_path+'/expected/'+executable),
-            read_file(test_dir + '/' + executable),
+            read_file(case_path+'/expected/main.md'),
+            read_file(test_dir + '/main.md'),
         )
 
         self.compare_directories(expected_dir=case_path+'/expected',
@@ -150,10 +147,10 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_executions),
             )
 
-    def compare_directories(self, expected_dir, actual_dir):
+    def compare_directories(self, expected_dir, actual_dir, retry_scan: bool=False):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
-        if diff != 0:
+        if diff != 0 and retry_scan:
             print('files are not different, giving extra-time to sync!')
             time.sleep(1)
             comparison = filecmp.dircmp(expected_dir, actual_dir)
