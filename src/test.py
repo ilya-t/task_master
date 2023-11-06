@@ -127,14 +127,18 @@ class TestTaskMaster(unittest.TestCase):
         prepare_artifact(src=case_path + '/actual_executions.log',
                          dst=test_executions)
 
-        main.TaskMaster(taskflow_file=test_dir+'/main.md',
+        executable = 'main.md'
+        if not os.path.exists(test_dir + '/' + executable):
+            executable = 'main/'+executable
+
+        main.TaskMaster(taskflow_file=test_dir + '/' + executable,
                         history_file=None,
                         timestamp_provider=test_time,
                         executions_logfile=test_executions).execute()
 
         self.assertEqual(
-            read_file(case_path+'/expected/main.md'),
-            read_file(test_dir+'/main.md'),
+            read_file(case_path+'/expected/'+executable),
+            read_file(test_dir + '/' + executable),
         )
 
         self.compare_directories(expected_dir=case_path+'/expected',
