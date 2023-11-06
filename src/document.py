@@ -182,6 +182,30 @@ class Document:
 
         return None
 
+    def inspect_topic(self, topic: {}) -> {}:
+        result = {}
+        result.update(topic)
+        root_start = topic['start']
+        root_lvl = get_topic_level(self._lines[root_start])
+        children = []
+        for t in self.get_topics():
+            if t['start'] <= root_start:
+                continue
+
+            current_lvl = get_topic_level(self._lines[t['start']])
+
+            if current_lvl <= root_lvl:
+                break
+
+            children.append(t)
+
+        children = sort_by_start(children)
+        result['children'] = children
+        return result
+
+    def line(self, index: int) -> str:
+        return self._lines[index]
+
 
 def _distinct_ranges_list(ranges: [{}]) -> [{}]:
     keys = set()
@@ -255,3 +279,18 @@ def get_line_title(s: str) -> str:
             s = s.removeprefix('#')
 
     return s[s.index(t_symbol) + 1:].strip()
+
+
+def get_topic_level(line: str) -> int:
+    level = 0
+    while line.startswith('#'):
+        line = line.removeprefix('#')
+        level += 1
+    return level
+
+
+def sort_by_end(a: []) -> []:
+    return sorted(a, key=lambda x: x['end'], reverse=True)
+
+def sort_by_start(ranges: [{}]) -> [{}]:
+    return sorted(ranges, key=lambda x: x['start'])

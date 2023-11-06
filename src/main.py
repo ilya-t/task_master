@@ -1,17 +1,20 @@
 import os
 import re
-import document
-import pyperclip
 import shutil
 import sys
 import time
 import uuid
 from datetime import datetime
-from document import get_padding
-from document import is_checkbox
 from typing import Callable
 
+import pyperclip
 from PIL import ImageGrab  # pip install pillow==10.0.0
+
+import document
+from document import get_padding
+from document import is_checkbox
+from document import sort_by_end
+from document import sort_by_start
 
 python_script_path = os.path.dirname(__file__)
 LOG_FILE = python_script_path + '/operations.log'
@@ -135,8 +138,8 @@ class TaskMaster:
 
         def try_insert_checkboxes(groups: []) -> None:
             for group in sort_by_end(groups):
-                start: int = group['start'] # target:15
-                end: int = group['end'] # target:16
+                start: int = group['start']
+                end: int = group['end']
                 if can_add_trailing_checkbox(start, end):
                     line = self._doc.lines()[start]
                     padding = line[:line.index('- [')]
@@ -256,21 +259,14 @@ class TaskMaster:
         pass
 
     def _move_completed_tasks(self):
-        def get_level(line: str) -> int:
-            level = 0
-            while line.startswith('#'):
-                line = line.removeprefix('#')
-                level += 1
-            return level
-
         def get_parents(subtask: {}, tasks: [{}]):
-            subtask_lvl = get_level(self._doc.lines()[subtask['start']])
+            subtask_lvl = document.get_topic_level(self._doc.lines()[subtask['start']])
             results = []
             for t in sort_by_end(tasks):
                 is_below_subtask = t['end'] > subtask['start']
                 if is_below_subtask:
                     continue
-                lvl = get_level(self._doc.lines()[t['start']])
+                lvl = document.get_topic_level(self._doc.lines()[t['start']])
 
                 if lvl < subtask_lvl:
                     results.append(self._doc.lines()[t['start']])
@@ -281,21 +277,40 @@ class TaskMaster:
             return results
 
         def get_insertion_specs(task: {}) -> {}:
+            task = self._doc.inspect_topic(task)
             start = task['start']
             end = task['end']
-            lines: [] = self._doc.lines()[start + 1:end + 1]
-            document.trim_trailing_empty_lines(lines)
-            address = [self._doc.lines()[start]]
+            children = task['children']
+            if len(children) > 0:
+                end = children[-1]['end']
+
+            address: [str] = [self._doc.line(start)]
 
             for p in get_parents(task, tasks):
                 address.insert(0, p)
             address = list(map(lambda e: document.get_line_title(e), address))
             if len(address) == 1:
                 address = split_title_to_address(document.get_line_title(self._doc.lines()[start]))
+
+            real_root_level = len(address)
+            raw_root_level = document.get_topic_level(self._doc.line(start))
+            level_inc = real_root_level - raw_root_level
+
+            if level_inc > 0:
+                extra_level = ('#' * level_inc)
+                for c in children:
+                    i = c['start']
+                    self._doc.update(i, extra_level + self._doc.line(i))
+
+            lines: [] = self._doc.lines()[start + 1:end + 1]
+            document.trim_trailing_empty_lines(lines)
             return {
                 'lines': lines,
                 'address': address,
+                'start': start,
+                'end': end,
             }
+
         if self._history_file == '':
             return
 
@@ -318,7 +333,7 @@ class TaskMaster:
                 if self._doc.lines()[checkbox_line][index] == '^':
                     self._doc.update(checkbox_line, self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][index + 1:])
 
-            self._doc.remove(start, end)
+            self._doc.remove(specs['start'], specs['end'])
 
         overall_insertions = 0
         for insertion in insertions:
@@ -845,14 +860,6 @@ def to_abs_path(config_file: str, src_path: str) -> str:
         return os.path.dirname(config_file) + '/' + src_path
 
     return src_path
-
-
-def sort_by_end(a: []) -> []:
-    return sorted(a, key=lambda x: x['end'], reverse=True)
-
-
-def sort_by_start(ranges: [{}]) -> [{}]:
-    return sorted(ranges, key=lambda x: x['start'])
 
 
 def log(message: str) -> None:
