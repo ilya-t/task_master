@@ -759,7 +759,9 @@ class TaskMaster:
                 block = self._find_dive_in_block(topic)
                 if len(block) > 0:
                     block.insert(0, 'set -e')
-                script_lines.extend(block)
+                    script_lines.extend(block)
+                    script_lines.append('set +e')
+
             script_lines.append(raw_cmd)
             script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
             document.write_lines(script_path, script_lines)
