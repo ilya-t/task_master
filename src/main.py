@@ -750,9 +750,9 @@ class TaskMaster:
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
             script_lines = []
 
-            bashrc = python_script_path + './bashrc'
-            if os.path.exists(bashrc):
-                script_lines.extend(document.read_lines(bashrc))
+            shell_rc = os.path.expanduser('~') + '/.zshrc'
+            if os.path.exists(shell_rc):
+                script_lines.extend(document.read_lines(shell_rc))
 
             topic = self._doc.get_topic_by_line(line_index)
             if topic:
@@ -765,7 +765,7 @@ class TaskMaster:
             script_lines.append(raw_cmd)
             script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
             document.write_lines(script_path, script_lines)
-            cmd = f'/bin/bash {script_path} &> {dst} &'
+            cmd = f'/bin/zsh {script_path} &> {dst} &'
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
