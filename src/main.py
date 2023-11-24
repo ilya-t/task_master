@@ -746,6 +746,8 @@ class TaskMaster:
             dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
             document.write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
+            # TODO: now is a good time to open executions.log
+            # and clean lines that look like /path/to.files/cmd.log:0
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
             script_lines = []
@@ -781,6 +783,9 @@ class TaskMaster:
 
                     src = to_abs_path(self._config_file, link)
                     dst = os.path.dirname(src) + '/' + new_name
+                    if not os.path.exists(src):
+                        continue
+
                     shutil.move(src, dst)
                     self._remove_execution_results(link)
                     return link.removesuffix(os.path.basename(link)) + new_name
