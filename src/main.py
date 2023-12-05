@@ -450,6 +450,8 @@ class TaskMaster:
         for match in hyperlink_matches:
             start_position = match.start()
             end_position = match.end()
+            while end_position - 2 > start_position and markdown_text[end_position - 2] == ')':
+                end_position = end_position - 1
             full_link = markdown_text[start_position:end_position]
             title = full_link[full_link.index('[') + 1:full_link.index('](')]
             link = full_link[full_link.index('](') + 2:-1]
@@ -534,7 +536,10 @@ class TaskMaster:
                     self._doc.update(i, line)
 
         existing_files: [str] = self._gather_existing_files()
-        unused_files: [str] = list(filter(lambda f: f not in used_links, existing_files))
+
+        def is_unused(f: str) -> bool:
+            return f not in used_links
+        unused_files: [str] = list(filter(is_unused, existing_files))
         self._prepare_unused(unused_files)
         self._process_unused()
 
