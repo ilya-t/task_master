@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import shutil
@@ -49,6 +50,7 @@ class TaskMaster:
     def __init__(self,
                  taskflow_file: str,
                  history_file: str,
+                 archived_links_processor: str = None,
                  timestamp_provider: Callable[[], int] = current_timestamp,
                  executions_logfile: str = python_script_path + '/executions.log') -> None:
         super().__init__()
@@ -59,6 +61,7 @@ class TaskMaster:
         self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
         self._executions_logfile = executions_logfile
         self._cached_executions = None
+        self._archived_links_processor = archived_links_processor
 
     def _untitled_to_tasks(self) -> None:
         if self._doc.lines()[0].startswith('# '):
@@ -331,6 +334,7 @@ class TaskMaster:
             if not document.is_task(task_title, status='x'):
                 continue
 
+            self._prepare_task_links_for_archive(task=t)
             specs = get_insertion_specs(t)
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
@@ -853,6 +857,12 @@ class TaskMaster:
                     return root + '/' + f
         return candidate
 
+    def _prepare_task_links_for_archive(self, task: {}) -> None:
+        if not self._archived_links_processor:
+            return
+
+        pass
+
 
 def increasing_index_file(dst: str) -> str:
     index = 0
@@ -933,8 +943,19 @@ def split_title_to_address(title: str) -> [str]:
     return list(map(lambda part: part.strip(), title.split('->')))
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Captures and outputs all clipboard.')
+    parser.add_argument('--archive', metavar='file', type=str,
+                        help='Path to archive file that will be used by default when tasks are completed.')
+    parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
+                        help='specifies a links processor that will be triggered when tasks are archived')
+    parser.add_argument('task_file', help='Path to file for processing', type=str)
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    args = sys.argv[1:]
-    if len(args) == 1:
-        args.append('')
-    TaskMaster(taskflow_file=args[0], history_file=args[1]).execute()
+    args = parse_args()
+    TaskMaster(taskflow_file=args.task_file,
+               history_file=args.archive,
+               archived_links_processor=args.experimental_archived_links_processor,
+               ).execute()
