@@ -52,13 +52,15 @@ class TaskMaster:
                  history_file: str,
                  archived_links_processor: str = None,
                  timestamp_provider: Callable[[], int] = current_timestamp,
-                 executions_logfile: str = python_script_path + '/executions.log') -> None:
+                 executions_logfile: str = None) -> None:
         super().__init__()
         self._timestamp_provider = timestamp_provider
         self._config_file = taskflow_file
         self._history_file = history_file
         self._doc = document.Document(self._config_file)
         self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
+        if not executions_logfile:
+            executions_logfile = python_script_path + '/executions.log'
         self._executions_logfile = executions_logfile
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
@@ -978,6 +980,10 @@ def parse_args():
     parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
                         help='specifies a links processor that will be triggered when tasks are archived')
     parser.add_argument('task_file', help='Path to file for processing', type=str)
+    parser.add_argument('--executions-log',
+                        metavar='file', type=str, required=False,
+                        help='Path to file where shell executions will be stored',
+                        )
     return parser.parse_args()
 
 
@@ -986,4 +992,5 @@ if __name__ == "__main__":
     TaskMaster(taskflow_file=args.task_file,
                history_file=args.archive,
                archived_links_processor=args.experimental_archived_links_processor,
+               executions_logfile=args.executions_log,
                ).execute()

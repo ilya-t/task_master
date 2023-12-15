@@ -1,7 +1,9 @@
+import subprocess
 import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
+import document
 import main
 import shutil
 import os
@@ -9,6 +11,7 @@ import filecmp
 
 python_script_path = os.path.dirname(__file__)
 
+TASK_MASTER_APP_VAR = '$task_master'
 
 def file_compare(file1, file2):
     with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
@@ -39,7 +42,7 @@ def get_test_cases() -> [str, str]:
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
     cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('completed_subtasks_moved_out_to_different_destinations'), cases))
+    # cases = list(filter(lambda c: c[0].endswith('raw_text_transformed_into_task'), cases))
     return cases
 
 
@@ -61,14 +64,24 @@ def prepare_artifact(src: str, dst: str):
     pass
 
 
+def run_task_master_at(test_dir: str):
+    def read_exec_script(test_dir: str) -> str:
+        script_path = test_dir + '/main.sh'
+        if os.path.exists(script_path):
+            return read_file(script_path)
+
+        return f'{TASK_MASTER_APP_VAR} --archive ./archive.md ./main.md'
+
+    script = read_exec_script(test_dir)
+    cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR, f'python3 {python_script_path}/main.py')
+    print(subprocess.check_output(cmd, universal_newlines=True, shell=True))
+    pass
+
+
 class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
     def test_cases(self, _: str, case_path: str):
-        if os.path.isdir(case_path + '/setup') and os.path.isdir(case_path + '/expected'):
-            self._run_testcase(case_path)
-            return
-
-        self.fail('Test has no body!')
+        self._run_testcase(case_path)
 
     def setUp(self):
         super().setUp()
@@ -82,18 +95,9 @@ class TestTaskMaster(unittest.TestCase):
         test_dir = case_path + '/actual'
         prepare_artifact(src=case_path + '/setup', dst=test_dir)
         test_executions = case_path + '/test_executions.log'
-        prepare_artifact(src=case_path + '/actual_executions.log',
+        prepare_artifact(src=case_path + '/executions.log',
                          dst=test_executions)
-
-        history_file = None
-        if os.path.exists(test_dir + '/archive.md'):
-            history_file = test_dir + '/archive.md'
-
-        master = main.TaskMaster(taskflow_file=test_dir + '/main.md',
-                                 history_file=history_file,
-                                 timestamp_provider=test_time,
-                                 executions_logfile=test_executions)
-        master.execute()
+        run_task_master_at(test_dir)
 
         self.assertEqual(
             read_file(case_path + '/expected/main.md'),
@@ -103,9 +107,9 @@ class TestTaskMaster(unittest.TestCase):
         self.compare_directories(expected_dir=case_path + '/expected',
                                  actual_dir=test_dir)
 
-        if os.path.exists(case_path + '/expected_executions.log'):
+        if os.path.exists(case_path + '/executions.log'):
             self.assertEqual(
-                read_file(case_path + '/expected_executions.log'),
+                read_file(case_path + '/executions.log'),
                 read_file(test_executions),
             )
 
