@@ -36,8 +36,8 @@ def get_test_cases() -> [str, str]:
 
     cases = []
 
-    cases.extend(scan_cases(python_script_path+'/tests/cases'))
-    cases.extend(scan_cases(python_script_path+'/tests/future', prefix='NOT SUPPORTED YET!'))
+    cases.extend(scan_cases(python_script_path + '/tests/cases'))
+    cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
     # cases = list(filter(lambda c: c[0].endswith('completed_subtasks_moved_out_to_different_destinations'), cases))
     return cases
@@ -64,61 +64,11 @@ def prepare_artifact(src: str, dst: str):
 class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
     def test_cases(self, _: str, case_path: str):
-        if os.path.exists(case_path + '/actual_input.md'):
-            self._run_testcase_v1(case_path)
-            return
         if os.path.isdir(case_path + '/setup') and os.path.isdir(case_path + '/expected'):
-            self._run_testcase_v2(case_path)
+            self._run_testcase(case_path)
             return
 
         self.fail('Test has no body!')
-
-    def _run_testcase_v1(self, case_path: str):
-        test_output = case_path + '/test_output.md'
-        test_files = main.get_config_files(test_output)
-        test_archive = case_path + '/test_archive.md'
-        test_executions = case_path + '/test_executions.log'
-
-        prepare_artifact(src=case_path + '/actual_input.md',
-                         dst=test_output)
-
-        prepare_artifact(src=case_path + '/actual_input.files',
-                         dst=test_files)
-
-        prepare_artifact(src=case_path + '/actual_archive.md',
-                         dst=test_archive)
-
-        prepare_artifact(src=case_path + '/actual_executions.log',
-                         dst=test_executions)
-
-        master = main.TaskMaster(taskflow_file=test_output, history_file=test_archive, timestamp_provider=test_time,
-                                 executions_logfile=test_executions)
-        master.execute()
-
-        self.assertEqual(
-            read_file(case_path + '/expected_output.md'),
-            read_file(test_output),
-        )
-
-        if os.path.exists(case_path + '/expected_archive.md'):
-            self.assertEqual(
-                read_file(case_path + '/expected_archive.md'),
-                read_file(test_archive),
-                msg='Archives are different!'
-            )
-
-        if os.path.exists(case_path + '/expected_output.files'):
-            self.compare_directories(
-                case_path + '/expected_output.files',
-                case_path + '/test_output.files',
-                retry_scan = os.path.exists(test_executions),
-            )
-
-        if os.path.exists(case_path + '/expected_executions.log'):
-            self.assertEqual(
-                read_file(case_path + '/expected_executions.log'),
-                read_file(test_executions),
-            )
 
     def setUp(self):
         super().setUp()
@@ -128,25 +78,29 @@ class TestTaskMaster(unittest.TestCase):
         super().tearDown()
         os.unsetenv(main.WAIT_EXECUTIONS_ENV)
 
-    def _run_testcase_v2(self, case_path: str):
+    def _run_testcase(self, case_path: str):
         test_dir = case_path + '/actual'
         prepare_artifact(src=case_path + '/setup', dst=test_dir)
         test_executions = case_path + '/test_executions.log'
         prepare_artifact(src=case_path + '/actual_executions.log',
                          dst=test_executions)
 
+        history_file = None
+        if os.path.exists(test_dir + '/archive.md'):
+            history_file = test_dir + '/archive.md'
+
         master = main.TaskMaster(taskflow_file=test_dir + '/main.md',
-                                 history_file=None,
+                                 history_file=history_file,
                                  timestamp_provider=test_time,
                                  executions_logfile=test_executions)
         master.execute()
 
         self.assertEqual(
-            read_file(case_path+'/expected/main.md'),
+            read_file(case_path + '/expected/main.md'),
             read_file(test_dir + '/main.md'),
         )
 
-        self.compare_directories(expected_dir=case_path+'/expected',
+        self.compare_directories(expected_dir=case_path + '/expected',
                                  actual_dir=test_dir)
 
         if os.path.exists(case_path + '/expected_executions.log'):
@@ -155,7 +109,7 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_executions),
             )
 
-    def compare_directories(self, expected_dir, actual_dir, retry_scan: bool=False):
+    def compare_directories(self, expected_dir, actual_dir, retry_scan: bool = False):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
         if diff != 0 and retry_scan:
