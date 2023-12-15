@@ -23,7 +23,7 @@ DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES = '# unused local files'
-
+WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
@@ -256,6 +256,8 @@ class TaskMaster:
         if self._doc.has_changed():
             self._make_defensive_copy()
             self._doc.save()
+
+        self._try_wait_executions()
 
     def _make_defensive_copy(self):
         os.makedirs(self._memories_dir, exist_ok=True)
@@ -862,6 +864,31 @@ class TaskMaster:
         if not self._archived_links_processor:
             return
 
+        pass
+
+    def _try_wait_executions(self):
+        if self._shell_launches == 0:
+            return
+
+        if os.environ.get(WAIT_EXECUTIONS_ENV, '') != 'true':
+            return
+
+        print('Blocking until all shell executions are completed!')
+
+        def has_running_shells() -> bool:
+            if not os.path.exists(self._executions_logfile):
+                return True
+            executions = shell.get_shell_executions(self._executions_logfile)
+            for e in executions:
+                if e['status'] == '':
+                    return True
+            return False
+
+        timeout_sec = 10
+        while has_running_shells() and timeout_sec >= 0:
+            wait_step = .1
+            timeout_sec = timeout_sec - wait_step
+            time.sleep(wait_step)
         pass
 
 

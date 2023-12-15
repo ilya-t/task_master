@@ -7,8 +7,6 @@ import shutil
 import os
 import filecmp
 
-from src import shell
-
 python_script_path = os.path.dirname(__file__)
 
 
@@ -96,7 +94,6 @@ class TestTaskMaster(unittest.TestCase):
         master = main.TaskMaster(taskflow_file=test_output, history_file=test_archive, timestamp_provider=test_time,
                                  executions_logfile=test_executions)
         master.execute()
-        self.wait_running_shells(master)
 
         self.assertEqual(
             read_file(case_path + '/expected_output.md'),
@@ -123,6 +120,14 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_executions),
             )
 
+    def setUp(self):
+        super().setUp()
+        os.environ[main.WAIT_EXECUTIONS_ENV] = 'true'
+
+    def tearDown(self):
+        super().tearDown()
+        os.unsetenv(main.WAIT_EXECUTIONS_ENV)
+
     def _run_testcase_v2(self, case_path: str):
         test_dir = case_path + '/actual'
         prepare_artifact(src=case_path + '/setup', dst=test_dir)
@@ -140,7 +145,6 @@ class TestTaskMaster(unittest.TestCase):
             read_file(case_path+'/expected/main.md'),
             read_file(test_dir + '/main.md'),
         )
-        self.wait_running_shells(master)
 
         self.compare_directories(expected_dir=case_path+'/expected',
                                  actual_dir=test_dir)
@@ -150,29 +154,6 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(case_path + '/expected_executions.log'),
                 read_file(test_executions),
             )
-
-    @staticmethod
-    def wait_running_shells(task_master: main.TaskMaster) -> None:
-        if task_master._shell_launches == 0:
-            return
-
-        executions_logfile = task_master._executions_logfile
-
-        def has_running_shells() -> bool:
-            if not os.path.exists(executions_logfile):
-                return True
-            executions = shell.get_shell_executions(executions_logfile)
-            for e in executions:
-                if e['status'] == '':
-                    return True
-            return False
-
-        timeout_sec = 5
-        while has_running_shells() and timeout_sec >= 0:
-            wait_step = .1
-            timeout_sec = timeout_sec - wait_step
-            time.sleep(wait_step)
-        pass
 
     def compare_directories(self, expected_dir, actual_dir, retry_scan: bool=False):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
