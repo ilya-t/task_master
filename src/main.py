@@ -445,9 +445,15 @@ class TaskMaster:
             r'(?:!)?\[\]\(([^\]]+)\)',
         ]
         hyperlink_matches = []
+        matches_keys = set()
         for p in patterns:
             matches = list(re.finditer(p, markdown_text))
-            hyperlink_matches.extend(matches)
+            for m in matches:
+                key: int = m.start()
+                if key in matches_keys:
+                    continue
+                hyperlink_matches.append(m)
+                matches_keys.add(key)
 
         results = []
 
