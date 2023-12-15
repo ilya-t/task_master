@@ -2,7 +2,6 @@ import argparse
 import os
 import re
 import shutil
-import sys
 import time
 import uuid
 from datetime import datetime
@@ -12,6 +11,7 @@ import pyperclip
 from PIL import ImageGrab  # pip install pillow==10.0.0
 
 import document
+import shell
 from document import get_padding
 from document import is_checkbox
 from document import sort_by_end
@@ -62,6 +62,7 @@ class TaskMaster:
         self._executions_logfile = executions_logfile
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
+        self._shell_launches = 0
 
     def _untitled_to_tasks(self) -> None:
         if self._doc.lines()[0].startswith('# '):
@@ -783,6 +784,7 @@ class TaskMaster:
             script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
             document.write_lines(script_path, script_lines)
             cmd = f'/bin/zsh {script_path} &> {dst} &'
+            self._shell_launches += 1
             os.system(cmd)
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
@@ -813,14 +815,7 @@ class TaskMaster:
         if not os.path.exists(abs_path):
             return []
 
-        def parse_line(s: str) -> {}:
-            file_and_status = s.split(':')
-            return {
-                'file': file_and_status[0],
-                'status': file_and_status[1],
-            }
-
-        self._cached_executions = list(map(parse_line, document.read_lines(abs_path)))
+        self._cached_executions = shell.get_shell_executions(abs_path)
         return self._cached_executions
 
     def _remove_execution_results(self, link: str):
