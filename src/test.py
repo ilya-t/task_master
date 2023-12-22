@@ -3,7 +3,6 @@ import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
-import document
 import main
 import shutil
 import os

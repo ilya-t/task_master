@@ -866,6 +866,14 @@ class TaskMaster:
         if not self._archived_links_processor:
             return
 
+        self._gather_links()
+
+        # 1. gather links from task
+        # reuse: src.main.TaskMaster._process_links
+        # 2. find local ones
+        # 3. apply processor self._archived_links_processor /abs/link
+        # 4. replace
+        raise Exception(f'Not yet supported! {self._archived_links_processor}')
         pass
 
     def _try_wait_executions(self):
