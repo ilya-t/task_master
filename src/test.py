@@ -114,7 +114,7 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_executions),
             )
 
-    def compare_directories(self, expected_dir, actual_dir, retry_scan: bool = False):
+    def compare_directories(self, expected_dir: str, actual_dir: str, retry_scan: bool = False):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
         if diff != 0 and retry_scan:
@@ -124,6 +124,11 @@ class TestTaskMaster(unittest.TestCase):
             diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
 
         if diff == 0:
+            for f in os.listdir(expected_dir):
+                candidate = expected_dir + '/' + f
+                if not os.path.isdir(candidate):
+                    continue
+                self.compare_directories(expected_dir=candidate, actual_dir=actual_dir + '/' + f, retry_scan=retry_scan)
             return
 
         def file_diff(file: str) -> str:

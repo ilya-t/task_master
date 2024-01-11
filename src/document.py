@@ -253,12 +253,13 @@ def write_lines(dst: str, lines: [str]) -> None:
     text_file.close()
 
 
-def read_lines(src) -> [str]:
-    def remove_trailing_newline(l: str) -> str:
-        if l.endswith('\n'):
-            return l[:-1]
-        return l
+def remove_trailing_newline(s: str) -> str:
+    if s.endswith('\n'):
+        return s[:-1]
+    return s
 
+
+def read_lines(src) -> [str]:
     with open(src, 'r') as file:
         return list(map(remove_trailing_newline, file.readlines()))
 

@@ -19,17 +19,26 @@ from document import sort_by_end
 from document import sort_by_start
 
 python_script_path = os.path.dirname(__file__)
+execution_location_path = os.path.abspath('')
+
 LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES = '# unused local files'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
+ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 
 
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
-    return os.path.dirname(config_file) + '/' + name + '.files'
+    path = os.path.dirname(config_file) + '/' + name + '.files'
+    if path.startswith('~'):
+        return os.path.expanduser(path)
+    elif path.startswith('./'):
+        return execution_location_path + path[1:]
+    else:
+        return path
 
 
 def current_timestamp() -> int:
@@ -332,6 +341,7 @@ class TaskMaster:
 
         tasks = self._doc.get_topics()
         insertions = []
+        processed_links = {}
 
         for t in sort_by_end(tasks):
             start = t['start']
@@ -341,7 +351,11 @@ class TaskMaster:
             if not document.is_task(task_title, status='x'):
                 continue
 
-            self._prepare_task_links_for_archive(task=t)
+            prepared = self._prepare_task_links_for_archive(task=t, processed_links=processed_links)
+
+            if not prepared:
+                continue
+
             specs = get_insertion_specs(t)
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
@@ -835,53 +849,53 @@ class TaskMaster:
                     return root + '/' + f
         return candidate
 
-    def _prepare_task_links_for_archive(self, task: {}) -> None:
-        print(f'>>> {self._archived_links_processor}')
+    def _prepare_task_links_for_archive(self, task: {}, processed_links: {}) -> bool:
         if not self._archived_links_processor:
-            return
+            return True
 
-        processed_links = {}
-
-        def process_link(l: str) -> str:
-            if l in processed_links:
-                return processed_links[l]
-
-            cmd = f'{self._archived_links_processor} {l}'
-            output = shell.capture_output(cmd)
-            outline: str = ''.join(output)
-            processed_links[l] = outline
+        def process_file(path: str) -> str | None:
+            if path in processed_links:
+                return processed_links[path]
+            if not os.path.exists(path):
+                return path
+            cmd = f'{self._archived_links_processor} {path}'
+            output = shell.capture_output(cmd, ignore_errors=True)
+            if not output:
+                return None
+            outline: str = document.remove_trailing_newline(''.join(output))
+            processed_links[path] = outline
             return outline
 
         task_lines = self._doc.get_topic_lines(task)
-        files_dir = './' + os.path.basename(get_config_files(self._config_file))
+        abs_files_dir = get_config_files(self._config_file)
+        files_dir = './' + os.path.basename(abs_files_dir)
         for i, line in enumerate(task_lines):
             line_links = document.get_links(line)
 
             for h in sort_by_end(line_links):
                 link: str = h['link']
-                print(f'>>> processing: {link}')
 
                 if not link.startswith(files_dir):
                     continue
 
-                new_link = process_link(link)
-                # TODO: test-case for handling errors!
+                abs_link = abs_files_dir + link[len(files_dir):]
+                new_link = process_file(abs_link)
+                if abs_link == new_link:
+                    continue
 
-                if new_link:
-                    prefix = ''
-                    is_picture_ref = h['full_link'].startswith('!')
-                    if is_picture_ref:
-                        prefix = '!'
-                    full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
-                    line = line[:h['start']] + full_link + line[h['end']:]
-                    self._doc.update(task['start'] + i, line)
+                if not new_link:
+                    li = task['start']
+                    self._doc.update(li, self._doc.line(li) + ' ' + ERROR_NOTATION)
+                    return False
 
-        # 1. [x] gather links from task
-        # reuse: src.main.TaskMaster._process_links
-        # 2. [x] find local ones
-        # 3. [ ] apply processor self._archived_links_processor /abs/link
-        # 4. [x] replace
-        pass
+                prefix = ''
+                is_picture_ref = h['full_link'].startswith('!')
+                if is_picture_ref:
+                    prefix = '!'
+                full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
+                line = line[:h['start']] + full_link + line[h['end']:]
+                self._doc.update(task['start'] + i, line)
+        return True
 
     def _try_wait_executions(self):
         if self._shell_launches == 0:
