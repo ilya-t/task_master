@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import shutil
+import subprocess
 import time
 import uuid
 from datetime import datetime
@@ -24,6 +25,7 @@ DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES = '# unused local files'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
+
 
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
@@ -137,7 +139,7 @@ class TaskMaster:
             if already_has_trailing_checkbox:
                 return False
 
-            if self._doc.lines()[start-1] == UNUSED_FILES:
+            if self._doc.lines()[start - 1] == UNUSED_FILES:
                 return False
 
             return True
@@ -346,7 +348,9 @@ class TaskMaster:
             if checkbox_line >= 0:
                 index = document.checkbox_status_index(self._doc.lines()[checkbox_line])
                 if self._doc.lines()[checkbox_line][index] == '^':
-                    self._doc.update(checkbox_line, self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][index + 1:])
+                    self._doc.update(checkbox_line,
+                                     self._doc.lines()[checkbox_line][:index] + 'x' + self._doc.lines()[checkbox_line][
+                                                                                      index + 1:])
 
             if self._history_file or specs['file_name']:
                 self._doc.remove(specs['start'], specs['end'])
@@ -434,50 +438,14 @@ class TaskMaster:
         lines: [str] = topic_insertion['lines']
         not_ending_with_blank = len(lines[-1].strip()) > 0
 
-        if not_ending_with_blank and (len(d.lines()) - 1 < content_insertion_line or len(d.lines()[content_insertion_line].strip()) > 0):
+        if not_ending_with_blank and (
+                len(d.lines()) - 1 < content_insertion_line or len(d.lines()[content_insertion_line].strip()) > 0):
             lines.append('')
 
         if content_insertion_line > len(d.lines()) - 1:
             d.extend(lines)
         else:
             d.insert_all(content_insertion_line, lines)
-
-    def _gather_links(self, markdown_text: str) -> []:
-        patterns = [
-            r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
-            r'(?:!)?\[([^\]]+)\]\(\)',
-            r'(?:!)?\[\]\(\)',
-            r'(?:!)?\[\]\(([^\]]+)\)',
-        ]
-        hyperlink_matches = []
-        matches_keys = set()
-        for p in patterns:
-            matches = list(re.finditer(p, markdown_text))
-            for m in matches:
-                key: int = m.start()
-                if key in matches_keys:
-                    continue
-                hyperlink_matches.append(m)
-                matches_keys.add(key)
-
-        results = []
-
-        for match in hyperlink_matches:
-            start_position = match.start()
-            end_position = match.end()
-            while end_position - 2 > start_position and markdown_text[end_position - 2] == ')':
-                end_position = end_position - 1
-            full_link = markdown_text[start_position:end_position]
-            title = full_link[full_link.index('[') + 1:full_link.index('](')]
-            link = full_link[full_link.index('](') + 2:-1]
-            results.append({
-                'title': title,
-                'link': link,
-                'full_link': full_link,
-                'start': start_position,
-                'end': end_position,
-            })
-        return results
 
     def _process_links(self):
         def to_file_name(input_string: str) -> str:
@@ -535,7 +503,7 @@ class TaskMaster:
         used_links = set()
 
         for i, line in enumerate(self._doc.lines()):
-            line_links = process_hyperlinks(i, self._gather_links(line))
+            line_links = process_hyperlinks(i, document.get_links(line))
 
             for h in sort_by_end(line_links):
                 new_link = h.get('processed_link', None)
@@ -554,6 +522,7 @@ class TaskMaster:
 
         def is_unused(f: str) -> bool:
             return f not in used_links
+
         unused_files: [str] = list(filter(is_unused, existing_files))
         self._prepare_unused(unused_files)
         self._process_unused()
@@ -608,14 +577,15 @@ class TaskMaster:
             if line[status] != 'x':
                 continue
 
-            links = self._gather_links(line)
+            links = document.get_links(line)
 
             if len(links) == 0:
                 continue
 
             link = links[0]['link']
             src = to_abs_path(self._config_file, link)
-            is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(config_files) # TODO improve check
+            is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(
+                config_files)  # TODO improve check
             if is_local_config_file and os.path.exists(src):
                 mem_dir = self._memories_dir + '/deleted_files'
 
@@ -726,7 +696,7 @@ class TaskMaster:
             extract_end = None
             extract_group_padding = None
 
-            for i in range(start, end+1):
+            for i in range(start, end + 1):
                 if extract_start:
                     subtasks_stopped = len(get_padding(self._doc.lines()[i])) <= len(extract_group_padding)
 
@@ -752,10 +722,13 @@ class TaskMaster:
 
             if extract_start and extract_end:
                 insertion_lines = [
-                    '# [ ] ' + document.get_line_title(self._doc.lines()[t['start']]) + ' -> ' + document.get_line_title(self._doc.lines()[extract_start - 1]),
+                    '# [ ] ' + document.get_line_title(
+                        self._doc.lines()[t['start']]) + ' -> ' + document.get_line_title(
+                        self._doc.lines()[extract_start - 1]),
                 ]
                 padding = get_padding(self._doc.lines()[extract_start])
-                insertion_lines.extend(map(lambda e: e.removeprefix(padding), self._doc.lines()[extract_start:extract_end+1]))
+                insertion_lines.extend(
+                    map(lambda e: e.removeprefix(padding), self._doc.lines()[extract_start:extract_end + 1]))
                 self._doc.remove(extract_start, extract_end)
                 self._doc.insert_all(t['start'], insertion_lines)
                 self._move_checkboxes_subtasks_into_tasks()
@@ -794,7 +767,7 @@ class TaskMaster:
         else:
             executions = self._get_shell_executions()
             for e in reversed(executions):
-                if e['file'].endswith(link.removeprefix('.')): # TODO: not precise file detection
+                if e['file'].endswith(link.removeprefix('.')):  # TODO: not precise file detection
                     status: str = e['status']
                     if not status.isdigit():
                         continue
@@ -863,17 +836,51 @@ class TaskMaster:
         return candidate
 
     def _prepare_task_links_for_archive(self, task: {}) -> None:
+        print(f'>>> {self._archived_links_processor}')
         if not self._archived_links_processor:
             return
 
-        self._gather_links()
+        processed_links = {}
 
-        # 1. gather links from task
+        def process_link(l: str) -> str:
+            if l in processed_links:
+                return processed_links[l]
+
+            cmd = f'{self._archived_links_processor} {l}'
+            output = shell.capture_output(cmd)
+            outline: str = ''.join(output)
+            processed_links[l] = outline
+            return outline
+
+        task_lines = self._doc.get_topic_lines(task)
+        files_dir = './' + os.path.basename(get_config_files(self._config_file))
+        for i, line in enumerate(task_lines):
+            line_links = document.get_links(line)
+
+            for h in sort_by_end(line_links):
+                link: str = h['link']
+                print(f'>>> processing: {link}')
+
+                if not link.startswith(files_dir):
+                    continue
+
+                new_link = process_link(link)
+                # TODO: test-case for handling errors!
+
+                if new_link:
+                    prefix = ''
+                    is_picture_ref = h['full_link'].startswith('!')
+                    if is_picture_ref:
+                        prefix = '!'
+                    full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
+                    line = line[:h['start']] + full_link + line[h['end']:]
+                    self._doc.update(task['start'] + i, line)
+
+        # 1. [x] gather links from task
         # reuse: src.main.TaskMaster._process_links
-        # 2. find local ones
-        # 3. apply processor self._archived_links_processor /abs/link
-        # 4. replace
-        raise Exception(f'Not yet supported! {self._archived_links_processor}')
+        # 2. [x] find local ones
+        # 3. [ ] apply processor self._archived_links_processor /abs/link
+        # 4. [x] replace
         pass
 
     def _try_wait_executions(self):

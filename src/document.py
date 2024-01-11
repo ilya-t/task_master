@@ -1,4 +1,5 @@
 import os
+import re
 
 
 def get_padding(line: str) -> str:
@@ -162,6 +163,9 @@ class Document:
 
         return topics
 
+    def get_topic_lines(self, topic: {}) -> [str]:
+        return self._lines[topic['start']: topic['end'] + 1]
+
     def get_topic_by_line(self, index: int) -> {}:
         candidate = None
         for t in self.get_topics():
@@ -304,5 +308,44 @@ def get_topic_level(line: str) -> int:
 def sort_by_end(a: []) -> []:
     return sorted(a, key=lambda x: x['end'], reverse=True)
 
+
 def sort_by_start(ranges: [{}]) -> [{}]:
     return sorted(ranges, key=lambda x: x['start'])
+
+
+def get_links(markdown_text: str) -> []:
+    patterns = [
+        r'(?:!)?\[([^\]]+)\]\(([^\]]+)\)',
+        r'(?:!)?\[([^\]]+)\]\(\)',
+        r'(?:!)?\[\]\(\)',
+        r'(?:!)?\[\]\(([^\]]+)\)',
+    ]
+    hyperlink_matches = []
+    matches_keys = set()
+    for p in patterns:
+        matches = list(re.finditer(p, markdown_text))
+        for m in matches:
+            key: int = m.start()
+            if key in matches_keys:
+                continue
+            hyperlink_matches.append(m)
+            matches_keys.add(key)
+
+    results = []
+
+    for match in hyperlink_matches:
+        start_position = match.start()
+        end_position = match.end()
+        while end_position - 2 > start_position and markdown_text[end_position - 2] == ')':
+            end_position = end_position - 1
+        full_link = markdown_text[start_position:end_position]
+        title = full_link[full_link.index('[') + 1:full_link.index('](')]
+        link = full_link[full_link.index('](') + 2:-1]
+        results.append({
+            'title': title,
+            'link': link,
+            'full_link': full_link,
+            'start': start_position,
+            'end': end_position,
+        })
+    return results

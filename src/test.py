@@ -8,6 +8,8 @@ import shutil
 import os
 import filecmp
 
+from src import shell
+
 python_script_path = os.path.dirname(__file__)
 
 TASK_MASTER_APP_VAR = '$task_master'
@@ -41,7 +43,7 @@ def get_test_cases() -> [str, str]:
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
     cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('raw_text_transformed_into_task'), cases))
+    # cases = list(filter(lambda c: c[0].endswith('custom_processing_for_links_of_completed_tasks'), cases))
     return cases
 
 
@@ -73,7 +75,7 @@ def run_task_master_at(test_dir: str):
 
     script = read_exec_script(test_dir)
     cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR, f'python3 {python_script_path}/main.py')
-    print(subprocess.check_output(cmd, universal_newlines=True, shell=True))
+    print(shell.capture_output(cmd))
     pass
 
 
