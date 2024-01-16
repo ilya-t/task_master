@@ -3,6 +3,7 @@ import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
+import pyperclip
 import main
 import shutil
 import os
@@ -86,6 +87,7 @@ class TestTaskMaster(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
+        pyperclip.copy('main.files')
         os.environ[main.WAIT_EXECUTIONS_ENV] = 'true'
 
     def tearDown(self):
@@ -147,7 +149,7 @@ class TestTaskMaster(unittest.TestCase):
         diff_files = map(file_diff, comparison.diff_files)
 
         self.fail('\n'.join([
-            "The directories are not equal. Differences:",
+            f'The directories "{expected_dir}" and "{actual_dir}" are not equal. Differences:',
             "Different Files:", '\n'.join(diff_files),
             "Files only in the expected directory:", '\n'.join(comparison.left_only),
             "Files only in the actual directory:", '\n'.join(comparison.right_only),
