@@ -8,7 +8,7 @@
         - [ ] 
     - [ ] subtask level 1
         - [ ] subtask level 2
-- [-] big task#1
+- [ ] big task#1
     - [x] subtask#1
 - [ ] big task#2
 
@@ -17,13 +17,13 @@
 - [x] done!
 
 # single injection to center
-- [-] task#1
+- [ ] task#1
 - [ ] task#2
     - [ ] subtask to task#2
 - [ ] 
 
 # another story
-- [-] task#1
+- [ ] task#1
 - [ ] task#2
     - [ ] subtask to task#2
     - [ ]

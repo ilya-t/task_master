@@ -2,17 +2,15 @@
 - [ ] [complete to delete](./main.files/unused)
 
 # >>> (Active) <<<
-- /
+- root
+    - ongoing task at root
     - [ongoing task with link](https://link.com)
-        - loading task with very very very very very very very very very very very very very long comment! 
+        - loading task with very very very very very very very very very very very very very long comment!
             - subtask#1
         - loading but not checked task
-            - non-loading subtask
-    - ongoing task at root
+            - loading subtask
 - another root
-
-# Ongoing tasks case
-Ongoing tasks are summarized in own synthetic section at top of document.
+    - Something is happening
 
 # [ ] root -> no ongoing tasks
 Intoduction note.
@@ -37,7 +35,7 @@ pwd
     - [ ] 
 - [ ] loading but not checked task
     - [x] completed subtask
-    - [-] non-loading subtask
+    - [-] loading subtask
     - [ ] 
 - [ ] 
 
@@ -46,5 +44,5 @@ pwd
 - [-] ongoing task at root
 - [ ] 
 
-# [-] another root
-Something is happening
+# another root
+- [-] Something is happening

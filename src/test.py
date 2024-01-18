@@ -44,7 +44,7 @@ def get_test_cases() -> [str, str]:
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
     cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('custom_processing_for_links_of_completed_tasks'), cases))
+    # cases = list(filter(lambda c: c[0].endswith('ongoing_tasks_overview'), cases))
     return cases
 
 
@@ -72,11 +72,17 @@ def run_task_master_at(test_dir: str):
         if os.path.exists(script_path):
             return read_file(script_path)
 
-        return f'{TASK_MASTER_APP_VAR} --archive ./archive.md ./main.md'
+        return None
 
     script = read_exec_script(test_dir)
-    cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR, f'python3 {python_script_path}/main.py')
-    print(shell.capture_output(cmd))
+    if script:
+        cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR, f'python3 {python_script_path}/main.py')
+        print(shell.capture_output(cmd))
+    else:
+        main.TaskMaster(
+            taskflow_file=f'{test_dir}/main.md',
+            history_file=f'{test_dir}/archive.md',
+        ).execute()
     pass
 
 

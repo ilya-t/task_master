@@ -1,4 +1,4 @@
-# Ongoing tasks case
+# >>> (Active) <<<
 Ongoing tasks are summarized in own synthetic section at top of document.
 
 # [ ] root -> no ongoing tasks
@@ -24,7 +24,7 @@ pwd
     - [ ] 
 - [ ] loading but not checked task
     - [x] completed subtask
-    - [-] non-loading subtask
+    - [-] loading subtask
     - [ ] 
 - [ ] 
 
@@ -33,5 +33,5 @@ pwd
 - [-] ongoing task at root
 - [ ] 
 
-# [-] another root
-Something is happening
+# another root
+- [-] Something is happening

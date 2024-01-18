@@ -25,7 +25,9 @@ LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
-UNUSED_FILES = '# unused local files'
+UNUSED_FILES_TOPIC = 'unused local files'
+UNUSED_FILES = f'# {UNUSED_FILES_TOPIC}'
+ACTIVE_TASKS_OVERVIEW_TOPIC = '>>> (Active) <<<'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 
@@ -93,7 +95,7 @@ class TaskMaster:
                 return None
 
             title = self._doc.lines()[topic['start']]
-            parent = split_title_to_address(document.get_line_title(title))[0]
+            parent = document.split_title_to_address(document.get_line_title(title))[0]
             parent_topic = self._doc.get_topic_by_title(parent)
 
             if not parent_topic:
@@ -255,6 +257,48 @@ class TaskMaster:
             self._doc.insert_all(index=task_start, lines=new_task_lines)
         pass
 
+    def _inject_ongoing_overview(self):
+        def filter_ongoing(tasks: []) -> []:
+            active_tasks = []
+            for t in tasks:
+                active = t['status'] == document.STATUS_IN_PROGRESS
+                active_children = filter_ongoing(t['children'])
+                if active or len(active_children) > 0:
+                    t['children'] = active_children
+                    active_tasks.append(t)
+            return active_tasks
+
+        def to_markdown(tasks: [], level: int = 0) -> [str]:
+            results = []
+
+            for task in tasks:
+                indent = "    " * level
+                results.append(f"{indent}- {task['title']}")
+                results.extend(to_markdown(tasks=task['children'], level=level + 1))
+            return results
+
+        existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
+
+        if existing:
+            self._doc.remove(existing['start'], existing['end'])
+
+        ongoing_tasks = filter_ongoing(self._doc.as_tasks_tree())
+
+        if len(ongoing_tasks) == 0:
+            # Not so much is going on!
+            return
+
+        start = 0
+
+        unused = self._doc.get_topic_by_title(UNUSED_FILES_TOPIC)
+        if unused:
+            start = unused['end']
+
+        lines: [str] = to_markdown(ongoing_tasks)
+        lines.insert(0, f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}')
+        self._doc.insert_all(start, lines)
+        pass
+
     def execute(self):
         self._untitled_to_tasks()
         self._insert_setup_template_to_tasks()
@@ -264,6 +308,7 @@ class TaskMaster:
         self._move_completed_tasks()
         self._update_checkboxes_status()
         self._process_links()
+        self._inject_ongoing_overview()
         self._trim_lines()
 
         if self._doc.has_changed():
@@ -309,7 +354,7 @@ class TaskMaster:
                 address.insert(0, p)
             address = list(map(lambda e: document.get_line_title(e), address))
             if len(address) == 1:
-                address = split_title_to_address(document.get_line_title(self._doc.lines()[start]))
+                address = document.split_title_to_address(document.get_line_title(self._doc.lines()[start]))
 
             root = address[0]
             dst = None
@@ -996,10 +1041,6 @@ def to_abs_path(config_file: str, src_path: str) -> str:
 def log(message: str) -> None:
     with open(LOG_FILE, mode='a') as log_file:
         print(message, file=log_file)
-
-
-def split_title_to_address(title: str) -> [str]:
-    return list(map(lambda part: part.strip(), title.split('->')))
 
 
 def parse_args():
