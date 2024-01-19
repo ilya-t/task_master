@@ -171,7 +171,6 @@ class Document:
             li = start + i
             if is_checkbox(line) and 'start' not in check_group:
                 check_group['start'] = li
-                check_group['line'] = self.line(li)
 
             end_of_file = li == len(self._lines) - 1
             if 'start' in check_group and (not is_checkbox(line) or end_of_file):
