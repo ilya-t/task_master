@@ -169,7 +169,7 @@ class TaskMaster:
                         }
                     )
 
-        check_groups = self._doc.get_flat_check_groups(
+        check_groups = self._doc.get_check_groups_at_range(
             start=0,
             end=len(self._doc.lines()) - 1,
         )
@@ -193,7 +193,7 @@ class TaskMaster:
         def add_space_groups(target_tasks: []):
             for t in target_tasks:
                 space_groups = []
-                check_groups = sorted(t['check_groups'], key=lambda x: x['start'])
+                check_groups = sorted(self._doc.get_check_groups(t), key=lambda x: x['start'])
                 check_group_end = None
                 for i, cg in enumerate(check_groups):
                     cg_start = cg['start']
@@ -750,7 +750,7 @@ class TaskMaster:
         tasks = self.exclude_unused_files_topic(self._doc.get_topics())
 
         for t in sort_by_start(tasks):
-            nested_groups = document.as_nested_dict(t['check_groups']) # TODO use document.
+            nested_groups = document.as_nested_dict(self._doc.get_check_groups(t))
             if len(nested_groups) == 0:
                 continue
 
@@ -983,7 +983,7 @@ class TaskMaster:
             return results
 
         trailing_checkbox_lines: [int] = find_trailing_checkboxes(
-            check_groups=self._doc.get_flat_check_groups(task['start'], task['end']))
+            check_groups=self._doc.get_check_groups(task))
         lines_to_remove = sorted(trailing_checkbox_lines, reverse=True)
         for i in lines_to_remove:
             self._doc.remove_line(i)

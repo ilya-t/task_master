@@ -77,68 +77,10 @@ class Document:
             return
         write_lines(dst=self._file, lines=self._lines)
 
-    # deprecated use: get_check_groups_nested + flatten
-    def get_check_groups(self) -> []:
-        def parse_nested_groups(start: int, end: int) -> None:
-            g = None
-            root_padding = len(get_padding(self._lines[start]))
-            group_padding = len(get_padding(self._lines[start]))
-            for i, line in enumerate(self._lines[start:end + 1]):
-                new_padding = len(get_padding(line))
-                if new_padding > group_padding:
-                    if not g:
-                        g = {'start': start + i}
-                        group_padding = new_padding
-                    parse_nested_groups(start + i, end)
-                if new_padding < group_padding:
-                    if g:
-                        g['end'] = start + i - 1
-                        nested_groups.append(g)
-                        group_padding = root_padding
-                    g = None
-                if new_padding < root_padding:
-                    return
+    def get_check_groups(self, topic: {}) -> [{}]:
+        return self.get_check_groups_at_range(topic['start'], topic['end'])
 
-        def remove_duplicates(data: [{}]) -> [{}]:
-            seen = set()
-            unique_data = []
-
-            for item in data:
-                # Convert the dictionary to a frozenset to make it hashable
-                frozen_item = frozenset(item.items())
-
-                if frozen_item not in seen:
-                    seen.add(frozen_item)
-                    unique_data.append(item)
-
-            return unique_data
-
-        check_groups = []
-        check_group = {}
-        for i, line in enumerate(self._lines):
-            if is_checkbox(line) and 'start' not in check_group:
-                check_group['start'] = i
-
-            end_of_file = i == len(self._lines) - 1
-            if 'start' in check_group and (not is_checkbox(line) or end_of_file):
-                if end_of_file:
-                    check_group['end'] = i
-                else:
-                    check_group['end'] = i - 1
-
-                check_groups.append(check_group)
-                check_group = {}
-
-        nested_groups = []
-        for group in check_groups:
-            start: int = group['start']
-            parse_nested_groups(start, group['end'])
-
-        check_groups.extend(nested_groups)
-        check_groups = remove_duplicates(check_groups)
-        return check_groups
-
-    def get_flat_check_groups(self, start: int, end: int) -> [{}]:
+    def get_check_groups_at_range(self, start: int, end: int) -> [{}]:
         '''
         :return: [ { 'start': 0, 'end': 10 }, ... ]
         '''
@@ -195,7 +137,6 @@ class Document:
         return check_groups
 
     def get_topics(self) -> {}:
-        check_groups = self.get_check_groups()
         topics = []
         topic = {}
         in_code_block = False
@@ -213,9 +154,6 @@ class Document:
                     topic['end'] = i
                 else:
                     topic['end'] = i - 1
-                topic_groups = filter(lambda g: topic['start'] <= g['start'] <= topic['end'], check_groups)
-                topic['check_groups'] = _distinct_ranges_list(topic_groups)
-
                 topics.append(topic)
                 topic = {
                     'start': i
@@ -334,7 +272,7 @@ class Document:
 
             result.append(task)
 
-            check_groups: [{}] = as_nested_dict(self.get_flat_check_groups(start, end))
+            check_groups: [{}] = as_nested_dict(self.get_check_groups(topic))
 
             if len(check_groups) == 0:
                 continue
