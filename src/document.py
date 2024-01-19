@@ -138,57 +138,59 @@ class Document:
         check_groups = remove_duplicates(check_groups)
         return check_groups
 
-    def _parse_nested_groups(self, dst: [], start: int, end: int) -> None:
-        g = None
-        root_padding = len(get_padding(self._lines[start]))
-        group_padding = len(get_padding(self._lines[start]))
-        for i, line in enumerate(self._lines[start:end + 1]):
-            new_padding = len(get_padding(line))
-
-            if new_padding > group_padding:
-                if not g:
-                    g = {'start': start + i}
-                    g['line'] = self.line(start + i)
-                    group_padding = new_padding
-                children = []
-                self._parse_nested_groups(children, start + i, end)
-                g['children'] = children
-
-            if new_padding < group_padding:
-                if g:
-                    g['end'] = start + i - 1
-                    dst.append(g)
-                    group_padding = root_padding
-                g = None
-
-            if new_padding < root_padding:
-                return
-
-    def get_check_groups_nested(self, start: int, end: int) -> []:
+    def get_flat_check_groups(self, start: int, end: int) -> [{}]:
         '''
-        :return: [ { 'start': 0, 'end': 10, 'children': [{ 'start': 2, ... ] }, ... ]
+        :return: [ { 'start': 0, 'end': 10 }, ... ]
         '''
-        check_groups = []
-        check_group = {}
+
+        levels = []
         for i, line in enumerate(self._lines[start:end + 1]):
+            if not is_checkbox(line):
+                continue
             li = start + i
-            if is_checkbox(line) and 'start' not in check_group:
-                check_group['start'] = li
+            levels.append({
+                'index': li,
+                'level': len(get_padding(line)),
+            })
 
-            end_of_file = li == end
-            if 'start' in check_group and (not is_checkbox(line) or end_of_file):
-                if end_of_file:
-                    check_group['end'] = li
+        check_groups = []
+
+        def next_scan_level(last_level: int) -> int:
+            candidate = last_level
+            for l in levels:
+                if 'scanned_level' in l and l['level'] == l['scanned_level']:
+                    continue
+                if l['level'] > candidate:
+                    return l['level']
+
+            if candidate == last_level:
+                return -1
+
+            return candidate
+
+        scan_level = next_scan_level(-1)
+        while scan_level >= 0:
+            group = None
+
+            for l in levels:
+                if l['level'] < scan_level:
+                    continue
+
+                l['scanned_level'] = scan_level
+                li = l['index']
+                if not group:
+                    group = { 'start': li, 'end': li}
+                    check_groups.append(group)
+                    continue
+
+                if group['end'] + 1 == li:
+                    group['end'] = li
                 else:
-                    check_group['end'] = li - 1
+                    # split and start new group if break occurs
+                    group = { 'start': li, 'end': li}
+                    check_groups.append(group)
 
-                check_groups.append(check_group)
-                check_group = {}
-
-        for group in check_groups:
-            children = []
-            self._parse_nested_groups(children, group['start'], group['end'])
-            group['children'] = children
+            scan_level = next_scan_level(scan_level)
 
         return check_groups
 
@@ -332,7 +334,7 @@ class Document:
 
             result.append(task)
 
-            check_groups: [{}] = self.get_check_groups_nested(start, end)
+            check_groups: [{}] = as_nested_dict(self.get_flat_check_groups(start, end))
 
             if len(check_groups) == 0:
                 continue
@@ -546,3 +548,49 @@ def get_links(markdown_text: str) -> []:
 
 def split_title_to_address(title: str) -> [str]:
     return list(map(lambda part: part.strip(), title.split('->')))
+
+
+def as_nested_dict(intervals: []) -> []:
+    def find_parent(group: {}, where: {}):
+        if group['start'] >= where['start'] and group['end'] <= where['end']:
+            for c in where.get('children', []):
+                candidate = find_parent(group, c)
+                if candidate:
+                    return candidate
+            return where
+        return None
+
+    def first_child(group: {}, where: [{}]) -> {}:
+        for child in where:
+            if child['start'] > group['start'] and child['end'] <= group['end']:
+                return child
+
+        return None
+
+    roots = []
+
+    for interval in intervals:
+        if 'children' not in interval:
+            interval['children'] = []
+        parent = None
+        for r in roots:
+            parent = find_parent(interval, r)
+            if parent:
+                break
+
+        if not parent:
+            c = first_child(interval, roots)
+            if c:
+                roots.remove(c)
+                children = interval.get('children', [])
+                children.append(c)
+                interval['children'] = children
+            roots.append(interval)
+            continue
+
+        children = parent.get('children', [])
+        children.append(interval)
+        parent['children'] = children
+        # re-balance tree
+        parent['children'] = as_nested_dict(parent['children'])
+    return roots

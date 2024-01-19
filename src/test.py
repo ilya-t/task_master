@@ -44,7 +44,7 @@ def get_test_cases() -> [str, str]:
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
     cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
     # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('ongoing_tasks_overview'), cases))
+    # cases = list(filter(lambda c: c[0].endswith('active'), cases))
     return cases
 
 

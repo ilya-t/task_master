@@ -40,3 +40,16 @@
 
 ## sub-story
 this is not a part of `first task`
+
+# [ ] story with single root task
+- [ ] in-progress
+    - [x] completed
+    - [x] completed#2
+        - [x] completed subtask
+        - [x] completed subtask#2
+    - [ ] uncompleted
+        - [ ] uncompleted subtask
+        - [ ] uncompleted subtask#2
+        - [ ] 
+    - [ ] 
+- [ ] 

@@ -155,22 +155,28 @@ class TaskMaster:
 
             return True
 
-        def try_insert_checkboxes(groups: []) -> None:
+        def try_insert_checkboxes(dst: [], groups: []) -> None:
             for group in sort_by_end(groups):
                 start: int = group['start']
                 end: int = group['end']
                 if can_add_trailing_checkbox(start, end):
-                    line = self._doc.lines()[start]
-                    padding = line[:line.index('- [')]
-                    self._doc.insert(end + 1, padding + '- [ ] ')
+                    line = self._doc.line(start)
+                    padding = get_padding(line)
+                    dst.append(
+                        {
+                            'end': end + 1,
+                            'line': padding + '- [ ] '
+                        }
+                    )
 
-                children = group.get('children', None)
-                if children:
-                    try_insert_checkboxes(children)
-
-        groups = self._doc.get_check_groups()
-        check_groups = as_nested_dict(groups)
-        try_insert_checkboxes(check_groups)
+        check_groups = self._doc.get_flat_check_groups(
+            start=0,
+            end=len(self._doc.lines()) - 1,
+        )
+        insertions = []
+        try_insert_checkboxes(insertions, check_groups)
+        for insertion in sort_by_end(insertions):
+            self._doc.insert(insertion['end'], insertion['line'])
 
     def _move_checkboxes_comments_into_tasks(self):
         def fix_space_groups_bounds(sg: []) -> []:
@@ -744,7 +750,7 @@ class TaskMaster:
         tasks = self.exclude_unused_files_topic(self._doc.get_topics())
 
         for t in sort_by_start(tasks):
-            nested_groups = as_nested_dict(t['check_groups'])
+            nested_groups = document.as_nested_dict(t['check_groups']) # TODO use document.
             if len(nested_groups) == 0:
                 continue
 
@@ -974,12 +980,10 @@ class TaskMaster:
             for g in check_groups:
                 if self._doc.line(g['end']).strip() == '- [ ]':
                     results.append(g['end'])
-
-                results.extend(find_trailing_checkboxes(g['children']))
             return results
 
         trailing_checkbox_lines: [int] = find_trailing_checkboxes(
-            check_groups = self._doc.get_check_groups_nested(task['start'], task['end']))
+            check_groups=self._doc.get_flat_check_groups(task['start'], task['end']))
         lines_to_remove = sorted(trailing_checkbox_lines, reverse=True)
         for i in lines_to_remove:
             self._doc.remove_line(i)
@@ -1001,50 +1005,6 @@ def increasing_index_file(dst: str) -> str:
 def _insert_all(dst: [str], index: int, lines: [str]):
     for l in reversed(lines):
         dst.insert(index, l)
-
-
-def as_nested_dict(intervals: []) -> []:
-    def find_parent(group: {}, where: {}):
-        if group['start'] >= where['start'] and group['end'] <= where['end']:
-            for c in where.get('children', []):
-                candidate = find_parent(group, c)
-                if candidate:
-                    return candidate
-            return where
-        return None
-
-    def first_child(group: {}, where: [{}]) -> {}:
-        for child in where:
-            if child['start'] > group['start'] and child['end'] <= group['end']:
-                return child
-
-        return None
-
-    roots = []
-
-    for interval in intervals:
-        parent = None
-        for r in roots:
-            parent = find_parent(interval, r)
-            if parent:
-                break
-
-        if not parent:
-            c = first_child(interval, roots)
-            if c:
-                roots.remove(c)
-                children = interval.get('children', [])
-                children.append(c)
-                interval['children'] = children
-            roots.append(interval)
-            continue
-
-        children = parent.get('children', [])
-        children.append(interval)
-        parent['children'] = children
-        # re-balance tree
-        parent['children'] = as_nested_dict(parent['children'])
-    return roots
 
 
 def to_abs_path(config_file: str, src_path: str) -> str:
