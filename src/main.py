@@ -140,7 +140,7 @@ class TaskMaster:
                     all_completed = False
 
             for gl in self._doc.lines()[start:end + 1]:
-                if gl.startswith(group_padding + '- [ ]'):
+                if not gl.startswith(group_padding + '- [x]'):
                     all_completed = False
 
             if all_completed:
@@ -390,12 +390,13 @@ class TaskMaster:
 
         for t in sort_by_end(tasks):
             start = t['start']
-            end = t['end']
             task_title = self._doc.lines()[start]
 
             if not document.is_task(task_title, status='x'):
                 continue
 
+            removed_lines = self._remove_trailing_checkboxes(t)
+            t['end'] = t['end'] - removed_lines
             prepared = self._prepare_task_links_for_archive(task=t, processed_links=processed_links)
 
             if not prepared:
@@ -966,6 +967,23 @@ class TaskMaster:
             timeout_sec = timeout_sec - wait_step
             time.sleep(wait_step)
         pass
+
+    def _remove_trailing_checkboxes(self, task: {}) -> int:
+        def find_trailing_checkboxes(check_groups: [{}]) -> [int]:
+            results = []
+            for g in check_groups:
+                if self._doc.line(g['end']).strip() == '- [ ]':
+                    results.append(g['end'])
+
+                results.extend(find_trailing_checkboxes(g['children']))
+            return results
+
+        trailing_checkbox_lines: [int] = find_trailing_checkboxes(
+            check_groups = self._doc.get_check_groups_nested(task['start'], task['end']))
+        lines_to_remove = sorted(trailing_checkbox_lines, reverse=True)
+        for i in lines_to_remove:
+            self._doc.remove_line(i)
+        return len(lines_to_remove)
 
 
 def increasing_index_file(dst: str) -> str:

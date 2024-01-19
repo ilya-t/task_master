@@ -165,6 +165,9 @@ class Document:
                 return
 
     def get_check_groups_nested(self, start: int, end: int) -> []:
+        '''
+        :return: [ { 'start': 0, 'end': 10, 'children': [{ 'start': 2, ... ] }, ... ]
+        '''
         check_groups = []
         check_group = {}
         for i, line in enumerate(self._lines[start:end + 1]):
@@ -172,7 +175,7 @@ class Document:
             if is_checkbox(line) and 'start' not in check_group:
                 check_group['start'] = li
 
-            end_of_file = li == len(self._lines) - 1
+            end_of_file = li == end
             if 'start' in check_group and (not is_checkbox(line) or end_of_file):
                 if end_of_file:
                     check_group['end'] = li
