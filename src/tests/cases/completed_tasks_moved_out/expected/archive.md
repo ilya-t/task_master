@@ -3,19 +3,19 @@ dive-in:
 ```sh
 git checkout branch_name
 ```
-- [x] already completed task
-- [x] completed
-    - [x] subtask#1
-- [x] completed
+- already completed task
+- completed
+    - subtask#1
+- completed
 
 # completed#2
 dive-in:
 ```sh
 git checkout branch_name
 ```
-- [x] already completed task
-- [x] completed
-    - [x] subtask#1
+- already completed task
+- completed
+    - subtask#1
 
 # existing archive notes
 <...>

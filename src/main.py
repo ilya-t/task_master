@@ -403,6 +403,7 @@ class TaskMaster:
 
             removed_lines = self._remove_trailing_checkboxes(t)
             t['end'] = t['end'] - removed_lines
+            self._remove_task_checkboxes(t)
             prepared = self._prepare_task_links_for_archive(task=t, processed_links=processed_links)
 
             if not prepared:
@@ -988,6 +989,16 @@ class TaskMaster:
         for i in lines_to_remove:
             self._doc.remove_line(i)
         return len(lines_to_remove)
+
+    def _remove_task_checkboxes(self, task: {}):
+        for group in sort_by_end(self._doc.get_check_groups(task)):
+            for i in range(group['start'], group['end']+1, 1):
+                line: str = self._doc.lines()[i]
+                if not document.is_checkbox(line):
+                    continue
+                excluded_checkbox = document.get_padding(line) + '-' + line[line.index(']') + 1:]
+                self._doc.update(i, excluded_checkbox)
+        pass
 
 
 def increasing_index_file(dst: str) -> str:
