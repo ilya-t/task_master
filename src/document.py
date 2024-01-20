@@ -293,14 +293,6 @@ class Document:
             task_with_parent = first_task_with_address(result)
 
         return result
-        # {
-        #     'root': {
-        #         'active': {
-        #             'one': {},
-        #             'two': {},
-        #         },
-        #     }
-        # }
 
     def _find_task_by_address(self, addr: [str], tasks: [{}]) -> {}:
         if len(addr) == 0:
