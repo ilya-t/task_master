@@ -1,4 +1,4 @@
-# [-] in-progress
+# [ ] in-progress
 Work in progress.
 
 # [x] [[lvl1]]

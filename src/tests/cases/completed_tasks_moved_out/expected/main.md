@@ -1,4 +1,4 @@
-# [-] in-progress
+# [ ] in-progress
 dive-in:
 ```sh
 git checkout branch_name

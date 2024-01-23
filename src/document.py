@@ -222,6 +222,11 @@ class Document:
 
     def as_tasks_tree(self) -> []:
         def get_status(line: str) -> str:
+            if line.startswith('#'):
+                while line.startswith('#'):
+                    line = line.removeprefix('#')
+                line = '- ' + line.lstrip()
+
             ci = checkbox_status_index(line)
             if ci >= 0:
                 return line[ci]
@@ -251,9 +256,6 @@ class Document:
             for t in tasks:
                 if 'address' in t:
                     return t
-
-        # if not self._file.endswith('main.md'):
-        #     return {}
 
         result = []
         for topic in self.get_topics():
@@ -309,11 +311,12 @@ class Document:
         existing_parent_addr = []
         nearest_existing_parent = None
         for part in addr:
-            existing_parent_addr.append(part)
+            existing_parent_addr.append(part) # comment??
             parent = self._find_task_by_address(existing_parent_addr, tasks)
             if parent:
                 nearest_existing_parent = parent
             else:
+                existing_parent_addr.pop(len(existing_parent_addr) - 1)
                 break
 
         if nearest_existing_parent:
