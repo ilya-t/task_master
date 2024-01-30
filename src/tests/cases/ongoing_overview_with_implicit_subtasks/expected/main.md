@@ -4,6 +4,9 @@
         - subtask
             - subtask checkbox
                 - subtask subcheckbox
+    - extracted task
+        - task
+            - ongoing task
 
 # [-] [[root]] -> task -> subtask
 This subtask of `task` extracted from checkbox actually was not declared as subtask. 
@@ -14,8 +17,18 @@ This subtask of `task` extracted from checkbox actually was not declared as subt
     - [ ] 
 - [ ] 
 
+# [ ] [[root]] -> extracted task
+- [ ] task
+    - [-] ongoing task
+    - [ ] 
+- [ ] 
+
+- [ ] task#2 
+- [ ] 
+
 # [-] [[root]]
 - [ ] experiment check-list
     - [^] task
     - [ ] 
+- [^] extracted task
 - [ ] 

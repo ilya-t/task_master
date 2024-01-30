@@ -280,7 +280,7 @@ class Document:
                 continue
 
             for group in check_groups:
-                task['children'] = to_tasks(group)
+                task['children'].extend(to_tasks(group))
 
         task_with_parent = first_task_with_address(result)
         while task_with_parent:
@@ -291,7 +291,6 @@ class Document:
             address.pop(len(address) - 1)
             parent_task = self._generate_task_by_address(address, result)
             parent_task['children'].append(task_with_parent)
-
             task_with_parent = first_task_with_address(result)
 
         return result
