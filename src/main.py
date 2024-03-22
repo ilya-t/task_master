@@ -284,10 +284,15 @@ class TaskMaster:
 
             for task in tasks:
                 indent = "    " * level
-                if 'topic_line' in task and all_children_are_checkboxes(task):
-                    topic_title = self._doc.line(task['topic_line'])
-                    topic_link = topic_title.lstrip('#').lstrip().replace(' ', '-')
-                    results.append(f"{indent}- [{task['title']}](#{topic_link})")
+                if 'topic_line' in task and (task['status'] == document.STATUS_IN_PROGRESS or
+                                             all_children_are_checkboxes(task)):
+                    topic_link = (self._doc.line(task['topic_line'])
+                                  .lstrip('#').lstrip().replace(' ', '-'))
+
+                    topic_title = task['title']
+                    if topic_title.startswith('[[') and topic_title.endswith(']]'):
+                        topic_title = topic_title.removeprefix('[[').removesuffix(']]')
+                    results.append(f"{indent}- [{topic_title}](#{topic_link})")
                 else:
                     results.append(f"{indent}- {task['title']}")
                 results.extend(to_markdown(tasks=task['children'], level=level + 1))

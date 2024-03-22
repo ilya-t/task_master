@@ -1,5 +1,5 @@
 # >>> (Active) <<<
-- [[root]]
+- [root](#[-]-[[root]])
     - task
         - [subtask](#[-]-[[root]]-->-task-->-subtask)
             - subtask checkbox
