@@ -275,11 +275,21 @@ class TaskMaster:
             return active_tasks
 
         def to_markdown(tasks: [], level: int = 0) -> [str]:
+            def all_children_are_checkboxes(task: {}) -> bool:
+                for child_task in task['children']:
+                    if 'topic_line' in child_task:
+                        return False
+                return True
             results = []
 
             for task in tasks:
                 indent = "    " * level
-                results.append(f"{indent}- {task['title']}")
+                if 'topic_line' in task and all_children_are_checkboxes(task):
+                    topic_title = self._doc.line(task['topic_line'])
+                    topic_link = topic_title.lstrip('#').lstrip().replace(' ', '-')
+                    results.append(f"{indent}- [{task['title']}](#{topic_link})")
+                else:
+                    results.append(f"{indent}- {task['title']}")
                 results.extend(to_markdown(tasks=task['children'], level=level + 1))
             return results
 

@@ -265,6 +265,7 @@ class Document:
             task = {
                 'title': title,
                 'status': get_status(self.line(start)),
+                'topic_line': topic['start'],
                 'children': [],
             }
 

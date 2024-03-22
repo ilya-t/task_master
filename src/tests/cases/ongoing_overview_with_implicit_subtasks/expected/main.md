@@ -1,10 +1,10 @@
 # >>> (Active) <<<
 - [[root]]
     - task
-        - subtask
+        - [subtask](#[-]-[[root]]-->-task-->-subtask)
             - subtask checkbox
                 - subtask subcheckbox
-    - extracted task
+    - [extracted task](#[-]-[[root]]-->-extracted-task)
         - task
             - ongoing task
 

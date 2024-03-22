@@ -4,12 +4,12 @@
 # >>> (Active) <<<
 - root
     - ongoing task at root
-    - [ongoing task with link](https://link.com)
+    - [[ongoing task with link](https://link.com)](#[-]-root-->-[ongoing-task-with-link](https://link.com))
         - loading task with very very very very very very very very very very very very very long comment!
             - subtask#1
         - loading but not checked task
             - loading subtask
-- another root
+- [another root](#another-root)
     - Something is happening
 
 # [ ] root -> no ongoing tasks
