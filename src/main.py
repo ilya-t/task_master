@@ -911,7 +911,7 @@ class TaskMaster:
                 return processed_links[path]
             if not os.path.exists(path):
                 return path
-            cmd = f'{self._archived_links_processor} {path}'
+            cmd = f'{self._archived_links_processor} "{path}"'
             output = shell.capture_output(cmd, ignore_errors=True)
             if not output:
                 return None
