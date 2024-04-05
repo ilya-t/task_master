@@ -288,6 +288,10 @@ class TaskMaster:
                                              all_children_are_checkboxes(task)):
                     topic_link = (self._doc.line(task['topic_line'])
                                   .lstrip('#').lstrip().replace(' ', '-'))
+                    nested_link_index: int = topic_link.find('](')
+
+                    if nested_link_index >= 0:
+                        topic_link = topic_link[:nested_link_index + 1]
 
                     topic_title = task['title']
                     if topic_title.startswith('[[') and topic_title.endswith(']]'):
