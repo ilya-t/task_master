@@ -28,6 +28,7 @@ HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES_TOPIC = 'unused local files'
 UNUSED_FILES = f'# {UNUSED_FILES_TOPIC}'
 ACTIVE_TASKS_OVERVIEW_TOPIC = '>>> (Active) <<<'
+ACTIVE_TASKS_OVERVIEW = f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 
@@ -222,7 +223,7 @@ class TaskMaster:
                 t['space_groups'] = fix_space_groups_bounds(space_groups)
             pass
 
-        tasks = self.exclude_unused_files_topic(self._doc.get_topics())
+        tasks = self.exclude_generated_topics(self._doc.get_topics())
         add_space_groups(tasks)
         insertions = []
 
@@ -758,16 +759,18 @@ class TaskMaster:
                 return i
         return 0
 
-    def exclude_unused_files_topic(self, topics: [{}]) -> [{}]:
+    def exclude_generated_topics(self, topics: [{}]) -> [{}]:
         results = []
         for t in topics:
             if self._doc.lines()[t['start']] == UNUSED_FILES:
+                continue
+            if self._doc.lines()[t['start']] == ACTIVE_TASKS_OVERVIEW:
                 continue
             results.append(t)
         return results
 
     def _move_checkboxes_subtasks_into_tasks(self):
-        tasks = self.exclude_unused_files_topic(self._doc.get_topics())
+        tasks = self.exclude_generated_topics(self._doc.get_topics())
 
         for t in sort_by_start(tasks):
             nested_groups = document.as_nested_dict(self._doc.get_check_groups(t))
