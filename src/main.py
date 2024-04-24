@@ -514,7 +514,9 @@ class TaskMaster:
             else:
                 if not d.line(existing_topic_line - 1).startswith('#'):
                     new_topics.append('')
-                d.insert_all(existing_topic_line, new_topics)
+                insertion_line = existing_topic_line
+                insertion_line = insertion_line + get_topic_text_height(d, start=insertion_line)
+                d.insert_all(insertion_line, new_topics)
 
         # add topic content
         topic_positions = get_existing_topic_positions()
@@ -522,18 +524,10 @@ class TaskMaster:
             content_insertion_line = 0
         else:
             content_insertion_line = topic_positions[-1] + 1
-            extend_existing_topic = not topic_insertion['lines'][0].startswith('#')
-            if extend_existing_topic:
-                lines_below = d.lines()[content_insertion_line:]
-                i = 0
-                for l in lines_below:
-                    if l.startswith('#'):
-                        break
-                    i = i + 1
-                content_insertion_line = content_insertion_line + i
+            content_insertion_line = content_insertion_line + get_topic_text_height(d, start=content_insertion_line)
 
-                while len(d.lines()[content_insertion_line - 1].strip()) == 0:
-                    content_insertion_line = content_insertion_line - 1
+            while len(d.lines()[content_insertion_line - 1].strip()) == 0:
+                content_insertion_line = content_insertion_line - 1
 
         lines: [str] = topic_insertion['lines']
         not_ending_with_blank = len(lines[-1].strip()) > 0
@@ -1080,6 +1074,15 @@ def parse_args():
                         )
     return parser.parse_args()
 
+
+def get_topic_text_height(d: document.Document, start: int) -> int:
+    lines_below = d.lines()[start:]
+    i = 0
+    for l in lines_below:
+        if l.startswith('#'):
+            break
+        i = i + 1
+    return i
 
 if __name__ == "__main__":
     args = parse_args()

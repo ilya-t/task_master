@@ -9,3 +9,9 @@ git checkout branch_name
 - completed
 - another set of completed tasks
 - future task #2
+
+## future task #2
+dive-in:
+```sh
+git checkout future!
+```
