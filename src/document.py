@@ -136,7 +136,7 @@ class Document:
 
         return check_groups
 
-    def get_topics(self) -> {}:
+    def get_topics(self) -> [{}]:
         topics = []
         topic = {}
         in_code_block = False

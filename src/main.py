@@ -464,7 +464,7 @@ class TaskMaster:
             d.save()
 
     @staticmethod
-    def insert_topic_to_history(d: document.Document, topic_insertion: [{}]) -> None:
+    def insert_topic_to_history(d: document.Document, topic_insertion: {}) -> None:
         address = topic_insertion['address']
 
         def get_title(address_index: int) -> str:
@@ -522,6 +522,19 @@ class TaskMaster:
             content_insertion_line = 0
         else:
             content_insertion_line = topic_positions[-1] + 1
+            extend_existing_topic = not topic_insertion['lines'][0].startswith('#')
+            if extend_existing_topic:
+                lines_below = d.lines()[content_insertion_line:]
+                i = 0
+                for l in lines_below:
+                    if l.startswith('#'):
+                        break
+                    i = i + 1
+                content_insertion_line = content_insertion_line + i
+
+                while len(d.lines()[content_insertion_line - 1].strip()) == 0:
+                    content_insertion_line = content_insertion_line - 1
+
         lines: [str] = topic_insertion['lines']
         not_ending_with_blank = len(lines[-1].strip()) > 0
 
