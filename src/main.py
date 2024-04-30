@@ -66,19 +66,23 @@ class TaskMaster:
                  history_file: str,
                  archived_links_processor: str = None,
                  timestamp_provider: Callable[[], int] = current_timestamp,
-                 executions_logfile: str = None) -> None:
+                 executions_logfile: str = None,
+                 memories_dir: str = None) -> None:
         super().__init__()
         self._timestamp_provider = timestamp_provider
         self._config_file = taskflow_file
         self._history_file = history_file
         self._doc = document.Document(self._config_file)
-        self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
+        if memories_dir:
+            self._memories_dir = memories_dir
+        else:
+            self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
         if not executions_logfile:
             executions_logfile = python_script_path + '/executions.log'
         self._executions_logfile = executions_logfile
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
-        self._shell_launches = 0
+        self._shell_launches = []
 
     def _untitled_to_tasks(self) -> None:
         if self._doc.lines()[0].startswith('# '):
@@ -326,6 +330,13 @@ class TaskMaster:
         pass
 
     def execute(self):
+        self._execute()
+        self._try_wait_executions()
+        if self._doc.has_changed():
+            self._make_defensive_copy()
+            self._doc.save()
+
+    def _execute(self):
         self._untitled_to_tasks()
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
@@ -336,12 +347,6 @@ class TaskMaster:
         self._process_links()
         self._inject_ongoing_overview()
         self._trim_lines()
-
-        if self._doc.has_changed():
-            self._make_defensive_copy()
-            self._doc.save()
-
-        self._try_wait_executions()
 
     def _make_defensive_copy(self):
         os.makedirs(self._memories_dir, exist_ok=True)
@@ -839,26 +844,34 @@ class TaskMaster:
             # and clean lines that look like /path/to.files/cmd.log:0
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
-            script_lines = []
+            script_lines = ['#!/bin/zsh']
 
             shell_rc = os.path.expanduser('~') + '/.zshrc'
             if os.path.exists(shell_rc):
-                script_lines.extend(document.read_lines(shell_rc))
+                # script_lines.extend(document.read_lines(shell_rc))
+                script_lines.append('source '+shell_rc+' > /dev/null')
 
             topic = self._doc.get_topic_by_line(line_index)
+            # script_lines.append('set -e')
             if topic:
                 block = self._find_dive_in_block(topic)
                 if len(block) > 0:
-                    block.insert(0, 'set -e')
+                    script_lines.append('# TASK MASTER: dive-in (start)')
                     script_lines.extend(block)
-                    script_lines.append('set +e')
+                    script_lines.append('# TASK MASTER: dive-in (end)')
 
+            script_lines.append('')
+            script_lines.append('# TASK MASTER: actual command')
             script_lines.append(raw_cmd)
-            script_lines.append(f'echo "{dst}:$?" >> {self._executions_logfile}')
             document.write_lines(script_path, script_lines)
-            cmd = f'/bin/zsh {script_path} &> {dst} &'
-            self._shell_launches += 1
+            os.system('chmod +x '+script_path)
+            cmd = '/bin/zsh -c "' + script_path + ' &> ' + dst + '; echo \'' + dst + ':\'\\$? >> ' + self._executions_logfile + '" &'
             os.system(cmd)
+            self._shell_launches.append({
+                'cmd': raw_cmd,
+                'output': dst,
+                'script_path': script_path,
+            })
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
             executions = self._get_shell_executions()
@@ -980,7 +993,7 @@ class TaskMaster:
         return True
 
     def _try_wait_executions(self):
-        if self._shell_launches == 0:
+        if len(self._shell_launches) == 0:
             return
 
         if os.environ.get(WAIT_EXECUTIONS_ENV, '') != 'true':
@@ -990,19 +1003,31 @@ class TaskMaster:
 
         def has_running_shells() -> bool:
             if not os.path.exists(self._executions_logfile):
+                print(f'executions file yet not present: {self._executions_logfile}')
                 return True
             executions = shell.get_shell_executions(self._executions_logfile)
             for e in executions:
                 if e['status'] == '':
+                    print(f'wait for execution: {e}')
                     return True
+
+            for sl in self._shell_launches:
+                abs_path = sl['output']
+
+                if os.path.exists(abs_path):
+                    print(f'file without retcode still exists: {abs_path} (script: {sl["script_path"]}')
+                    return True
+
             return False
 
-        timeout_sec = 10
+        timeout_sec = 5
         while has_running_shells() and timeout_sec >= 0:
-            wait_step = .1
+            wait_step = .5
             timeout_sec = timeout_sec - wait_step
             time.sleep(wait_step)
         pass
+
+        self._execute()
 
     def _remove_trailing_checkboxes(self, task: {}) -> int:
         def find_trailing_checkboxes(check_groups: [{}]) -> [int]:
@@ -1072,6 +1097,10 @@ def parse_args():
                         metavar='file', type=str, required=False,
                         help='Path to file where shell executions will be stored',
                         )
+    parser.add_argument('--memories-dir',
+                        metavar='file', type=str, required=False,
+                        help='Path to file where temporary files will be stored (mostly should be used for testing)',
+                        )
     return parser.parse_args()
 
 
@@ -1084,10 +1113,12 @@ def get_topic_text_height(d: document.Document, start: int) -> int:
         i = i + 1
     return i
 
+
 if __name__ == "__main__":
     args = parse_args()
     TaskMaster(taskflow_file=args.task_file,
                history_file=args.archive,
                archived_links_processor=args.experimental_archived_links_processor,
                executions_logfile=args.executions_log,
+               memories_dir=args.memories_dir,
                ).execute()
