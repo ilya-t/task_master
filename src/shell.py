@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 import document
@@ -23,3 +24,18 @@ def capture_output(cmd: str, ignore_errors=False) -> str | None:
         if ignore_errors:
             return None
         raise e
+
+
+def _get_link_with_retcode(src: str, retcode: str) -> str:
+    name, ext = os.path.splitext(os.path.basename(src))
+    new_name = f'{name}-retcode={retcode}{ext}'
+    parent = os.path.dirname(src)
+    index = ''
+    while os.path.exists(parent + '/' + new_name):
+        if len(index) == 0:
+            index = '0'
+        else:
+            index = str(int(index) + 1)
+        new_name = f'{name}{index}-retcode={retcode}{ext}'
+
+    return parent + '/' + new_name

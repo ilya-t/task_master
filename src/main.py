@@ -881,17 +881,15 @@ class TaskMaster:
                     if not status.isdigit():
                         continue
 
-                    name, ext = os.path.splitext(os.path.basename(link))
-                    new_name = f'{name}-retcode={status}{ext}'
-
                     src = to_abs_path(self._config_file, link)
-                    dst = os.path.dirname(src) + '/' + new_name
+
                     if not os.path.exists(src):
                         continue
 
+                    dst: str = shell._get_link_with_retcode(src, status)
                     shutil.move(src, dst)
                     self._remove_execution_results(link)
-                    return link.removesuffix(os.path.basename(link)) + new_name
+                    return link.removesuffix(os.path.basename(link)) + os.path.basename(dst)
             return link
 
     def _get_shell_executions(self) -> [{}]:
