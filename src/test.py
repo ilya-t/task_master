@@ -9,7 +9,7 @@ import shutil
 import os
 import filecmp
 
-from src import shell
+import shell
 
 python_script_path = os.path.dirname(__file__)
 
@@ -76,7 +76,8 @@ def run_task_master_at(test_dir: str):
 
     script = read_exec_script(test_dir)
     if script:
-        cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR, f'python3 {python_script_path}/main.py')
+        cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR,
+                                                  f'{python_script_path}/venv/bin/python3 {python_script_path}/main.py')
         print(shell.capture_output(cmd))
     else:
         main.TaskMaster(

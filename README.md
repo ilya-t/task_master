@@ -5,3 +5,9 @@
 ./setup.sh
 ./run --help
 ```
+
+## Run tests
+```sh
+cd src
+./testrun.sh
+```
