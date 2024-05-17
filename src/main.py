@@ -618,6 +618,7 @@ class TaskMaster:
                     self._doc.update(i, line)
 
         existing_files: [str] = self._gather_existing_files()
+        existing_files = list(filter(lambda f: not f.endswith('/.DS_Store'), existing_files))
 
         def is_unused(f: str) -> bool:
             return f not in used_links
