@@ -1,4 +1,4 @@
-# unused local files
+# [ ] unused local files (complete to delete all)
 - [x] complete to delete -> `./main.files/used.txt` 
 - [ ] [DO NOT DELETE](./main.files/used.txt)
 

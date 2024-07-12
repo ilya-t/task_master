@@ -1,4 +1,4 @@
-# unused local files
+# [ ] unused local files (complete to delete all)
 - [ ] [complete to delete](./main.files/unused.txt)
 - [ ] [DO NOT DELETE](./main.files/used.txt)
 [this] text should not generate subtask

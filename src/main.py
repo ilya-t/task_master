@@ -25,8 +25,8 @@ LOG_FILE = python_script_path + '/operations.log'
 DIVE_TEMPLATE_INTRO = 'dive-in:'
 DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
-UNUSED_FILES_TOPIC = 'unused local files'
-UNUSED_FILES = f'# {UNUSED_FILES_TOPIC}'
+UNUSED_FILES_TOPIC = 'unused local files (complete to delete all)'
+UNUSED_FILES = f'# [ ] {UNUSED_FILES_TOPIC}'
 ACTIVE_TASKS_OVERVIEW_TOPIC = '>>> (Active) <<<'
 ACTIVE_TASKS_OVERVIEW = f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
@@ -155,7 +155,7 @@ class TaskMaster:
             if already_has_trailing_checkbox:
                 return False
 
-            if self._doc.lines()[start - 1] == UNUSED_FILES:
+            if document.get_line_title(self._doc.line(start - 1)) == UNUSED_FILES_TOPIC:
                 return False
 
             return True
@@ -426,6 +426,9 @@ class TaskMaster:
             if not document.is_task(task_title, status='x'):
                 continue
 
+            if document.get_line_title(task_title) == UNUSED_FILES_TOPIC:
+                continue
+
             removed_lines = self._remove_trailing_checkboxes(t)
             t['end'] = t['end'] - removed_lines
             self._remove_task_checkboxes(t)
@@ -598,15 +601,17 @@ class TaskMaster:
                     match['processed_link'] = processed_link
 
             return hyperlinks
-
-        used_links = set()
+        used_link_lines = {}
 
         for i, line in enumerate(self._doc.lines()):
             line_links = process_hyperlinks(i, document.get_links(line))
 
             for h in sort_by_end(line_links):
                 new_link = h.get('processed_link', None)
-                used_links.add(h.get('processed_link', h['link']))
+                l = h.get('processed_link', h['link'])
+                link_lines = used_link_lines.get(l, set())
+                link_lines.add(i)
+                used_link_lines[l] = link_lines
 
                 if new_link:
                     prefix = ''
@@ -621,28 +626,14 @@ class TaskMaster:
         existing_files = list(filter(lambda f: not f.endswith('/.DS_Store'), existing_files))
 
         def is_unused(f: str) -> bool:
-            return f not in used_links
+            return f not in used_link_lines
 
         unused_files: [str] = list(filter(is_unused, existing_files))
         self._prepare_unused(unused_files)
-        self._process_unused()
+        self._process_unused(used_link_lines)
 
     def get_unused_files_topic(self) -> {}:
-        result = {}
-        for i, line in enumerate(self._doc.lines()):
-            if line == UNUSED_FILES:
-                result['start'] = i
-                continue
-
-            if 'start' in result and line.startswith('#'):
-                result['end'] = i - 1
-                break
-
-        if 'start' not in result:
-            return None
-        if 'end' not in result:
-            result['end'] = len(self._doc.lines()) - 1
-        return result
+        return self._doc.get_topic_by_title(UNUSED_FILES_TOPIC)
 
     def _prepare_unused(self, unused: [str]):
         if len(unused) == 0:
@@ -662,19 +653,25 @@ class TaskMaster:
         for u in unused:
             self._doc.insert(start + 1, '- [ ] [complete to delete](' + u + ')')
 
-    def _process_unused(self):
+    def _process_unused(self, used_links_topics: {}):
+        def used_outside_unused_files_topic(link: str) -> bool:
+            used_in: set = used_links_topics.get(link, set())
+            for used_link_line_index in used_in:
+                if used_link_line_index < topic['start']:
+                    return True
+                if used_link_line_index > topic['end']:
+                    return True
+            return False
+
         topic = self.get_unused_files_topic()
         if not topic:
             return
 
+        delete_all: bool = document.is_task(self._doc.line(topic['start']), status='x')
         config_files = get_config_files(self._config_file)
         for i in reversed(range(topic['start'], topic['end'] + 1)):
             line = self._doc.lines()[i]
-            status = document.checkbox_status_index(line)
-            if status < 0:
-                continue
-
-            if line[status] != 'x':
+            if not document.is_checkbox(line, 'x') and not delete_all:
                 continue
 
             links = document.get_links(line)
@@ -683,6 +680,10 @@ class TaskMaster:
                 continue
 
             link = links[0]['link']
+            if used_outside_unused_files_topic(link):
+                self._doc.remove_line(i)
+                continue
+
             src = to_abs_path(self._config_file, link)
             is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(
                 config_files)  # TODO improve check

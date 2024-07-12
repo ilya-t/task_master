@@ -8,10 +8,12 @@ STATUS_OPEN = ' '
 def get_padding(line: str) -> str:
     if len(line) == 0:
         return ''
-    try:
-        return line[:line.index('- [')]
-    except ValueError:
+
+    index = line.find('- [')
+    if index < 0:
         return ''
+    else:
+        return line[:index]
 
 
 def is_checkbox(line: str, status: str = None) -> bool:
@@ -422,7 +424,10 @@ def get_line_title(s: str) -> str:
             s = s.removeprefix('#')
     if len(s) == 0:
         return s
-    return s[s.index(t_symbol) + 1:].strip()
+    ti = s.find(t_symbol)
+    if ti < 0:
+        return ''
+    return s[ti + 1:].strip()
 
 
 def get_topic_level(line: str) -> int:
