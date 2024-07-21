@@ -249,6 +249,7 @@ class Document:
                 if get_padding(l) == root_padding:
                     results.append({
                         'title': get_line_title(l),
+                        'line_index': li,
                         'status': get_status(l),
                         'children': subtasks,
                     })
@@ -267,7 +268,7 @@ class Document:
             task = {
                 'title': title,
                 'status': get_status(self.line(start)),
-                'topic_line': topic['start'],
+                'line_index': start,
                 'children': [],
             }
 

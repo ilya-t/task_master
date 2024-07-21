@@ -1,12 +1,12 @@
 # >>> (Active) <<<
-- [root](#[-]-[[root]])
+- root
     - task
-        - [subtask](#[-]-[[root]]-->-task-->-subtask)
+        - subtask
             - subtask checkbox
-                - subtask subcheckbox
-    - [extracted task](#[-]-[[root]]-->-extracted-task)
+                - [subtask subcheckbox](main.md#L16)
+    - extracted task
         - task
-            - ongoing task
+            - [ongoing task](main.md#L22)
 
 # [-] [[root]] -> task -> subtask
 This subtask of `task` extracted from checkbox actually was not declared as subtask. 

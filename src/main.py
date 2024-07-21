@@ -279,32 +279,30 @@ class TaskMaster:
                     active_tasks.append(t)
             return active_tasks
 
-        def to_markdown(tasks: [], level: int = 0) -> [str]:
-            def all_children_are_checkboxes(task: {}) -> bool:
-                for child_task in task['children']:
-                    if 'topic_line' in child_task:
-                        return False
-                return True
+        def prepare_lines(tasks: [], level: int = 0) -> [{}]:
             results = []
-
             for task in tasks:
                 indent = "    " * level
-                if 'topic_line' in task and (task['status'] == document.STATUS_IN_PROGRESS or
-                                             all_children_are_checkboxes(task)):
-                    topic_link = (self._doc.line(task['topic_line'])
-                                  .lstrip('#').lstrip().replace(' ', '-'))
-                    nested_link_index: int = topic_link.find('](')
+                topic_title = task['title'].strip()
+                if topic_title.startswith('[[') and topic_title.endswith(']]'):
+                    topic_title = topic_title.removeprefix('[[').removesuffix(']]')
+                if len(task['children']) == 0:
+                    results.append(
+                        {
+                            'indent': indent,
+                            'title': topic_title,
+                            'line_index': task['line_index'],
+                        }
+                    )
 
-                    if nested_link_index >= 0:
-                        topic_link = topic_link[:nested_link_index + 1]
-
-                    topic_title = task['title']
-                    if topic_title.startswith('[[') and topic_title.endswith(']]'):
-                        topic_title = topic_title.removeprefix('[[').removesuffix(']]')
-                    results.append(f"{indent}- [{topic_title}](#{topic_link})")
                 else:
-                    results.append(f"{indent}- {task['title']}")
-                results.extend(to_markdown(tasks=task['children'], level=level + 1))
+                    results.append(
+                        {
+                            'indent': indent,
+                            'title': topic_title,
+                        }
+                    )
+                results.extend(prepare_lines(tasks=task['children'], level=level + 1))
             return results
 
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
@@ -324,7 +322,22 @@ class TaskMaster:
         if unused:
             start = unused['end']
 
-        lines: [str] = to_markdown(ongoing_tasks)
+        raw_lines: [{}] = prepare_lines(ongoing_tasks)
+        lines: [str] = []
+        ongoing_topic_height: int = len(raw_lines) + 3
+        # static +3:
+        # 1 for title,
+        # 1 for space after topic,
+        # 1 for static shift cause file first line is not 0
+        for r in raw_lines:
+            if 'line_index' in r:
+                shifted_index = r['line_index'] + ongoing_topic_height
+                lines.append(
+                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._config_file)}#L{shifted_index})"
+                )
+            else:
+                lines.append(f"{r['indent']}- {r['title']}")
+
         lines.insert(0, f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}')
         self._doc.insert_all(start, lines)
         pass
