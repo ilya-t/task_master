@@ -469,9 +469,8 @@ def get_links(markdown_text: str) -> []:
 
     for match in hyperlink_matches:
         start_position = match.start()
-        end_position = match.end()
-        while end_position - 2 > start_position and markdown_text[end_position - 2] == ')':
-            end_position = end_position - 1
+        link_start = markdown_text.index('](', start_position) + 2
+        end_position = markdown_text.index(')', link_start) + 1
         full_link = markdown_text[start_position:end_position]
         title = full_link[full_link.index('[') + 1:full_link.index('](')]
         link = full_link[full_link.index('](') + 2:-1]
