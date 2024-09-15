@@ -450,7 +450,7 @@ class TaskMaster:
             if not prepared:
                 continue
 
-            specs = get_insertion_specs(t)
+            specs = get_insertion_specs(t)#
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
             if checkbox_line >= 0:
@@ -537,6 +537,8 @@ class TaskMaster:
                     new_topics.append('')
                 insertion_line = existing_topic_line
                 insertion_line = insertion_line + get_topic_text_height(d, start=insertion_line)
+                if insertion_line > 0 and len(d.line(insertion_line-1).strip()) != 0:
+                    new_topics.insert(0, '')
                 d.insert_all(insertion_line, new_topics)
 
         # add topic content
@@ -1120,8 +1122,12 @@ def parse_args():
 def get_topic_text_height(d: document.Document, start: int) -> int:
     lines_below = d.lines()[start:]
     i = 0
+    code_block = False
     for l in lines_below:
-        if l.startswith('#'):
+        if l.startswith('```'):
+            code_block = not code_block
+
+        if not code_block and l.startswith('#'):
             break
         i = i + 1
     return i
