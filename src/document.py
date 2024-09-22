@@ -452,7 +452,10 @@ def get_links(markdown_text: str) -> []:
     text = markdown_text
 
     while len(text) > 0:
-        link_start = text.find('[')
+        link_start = text.find('](')
+        while link_start >= 0 and text[link_start] != '[':
+            link_start -= 1
+
         if link_start < 0:
             break
 

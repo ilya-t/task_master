@@ -700,8 +700,7 @@ class TaskMaster:
                 continue
 
             src = to_abs_path(self._config_file, link)
-            is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(
-                config_files)  # TODO improve check
+            is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(config_files)
             if is_local_config_file and os.path.exists(src):
                 mem_dir = self._memories_dir + '/deleted_files'
 

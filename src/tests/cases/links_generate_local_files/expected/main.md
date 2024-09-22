@@ -12,3 +12,5 @@ In the result of this test we must see a few generated files:
 
 no generation is done for links:
 - [existing file](./expected_output.md)
+- [ ] [](./main.files/untitled1)
+- [ ] 
