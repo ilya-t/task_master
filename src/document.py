@@ -448,39 +448,49 @@ def sort_by_start(ranges: [{}]) -> [{}]:
 
 
 def get_links(markdown_text: str) -> []:
-    patterns = [
-        r'(?:!)?\[([^\]]+)\]\(([^\)]+)\)',
-        r'(?:!)?\[([^\]]+)\]\(\)',
-        r'(?:!)?\[\]\(\)',
-        r'(?:!)?\[\]\(([^\]]+)\)',
-    ]
-    hyperlink_matches = []
-    matches_keys = set()
-    for p in patterns:
-        matches = list(re.finditer(p, markdown_text))
-        for m in matches:
-            key: int = m.start()
-            if key in matches_keys:
-                continue
-            hyperlink_matches.append(m)
-            matches_keys.add(key)
-
     results = []
+    text = markdown_text
 
-    for match in hyperlink_matches:
-        start_position = match.start()
-        link_start = markdown_text.index('](', start_position) + 2
-        end_position = markdown_text.index(')', link_start) + 1
-        full_link = markdown_text[start_position:end_position]
-        title = full_link[full_link.index('[') + 1:full_link.index('](')]
-        link = full_link[full_link.index('](') + 2:-1]
-        results.append({
+    while len(text) > 0:
+        link_start = text.find('[')
+        if link_start < 0:
+            break
+
+        if link_start > 1 and text[link_start-1] == '!':
+            link_start = link_start - 1
+            text = text[link_start + 2:]
+            link_length = 2
+        else:
+            link_length = 1
+            text = text[link_start + 1:]
+
+        title_end = text.find('](')
+
+        if title_end < 0:
+            break
+        link_length = link_length + title_end
+        title = text[:title_end]
+        text = text[title_end:]
+        link_end = text.find(')')
+
+        if link_end < 0:
+            break
+        link = text[2:link_end]
+        link_end = link_end + 1  # for )
+        link_length = link_length + link_end
+        last_shift = results[len(results)-1]['end'] if len(results) > 0 else 0
+        abs_link_start = last_shift + link_start
+        abs_link_end = abs_link_start + link_length
+
+        result = {
             'title': title,
             'link': link,
-            'full_link': full_link,
-            'start': start_position,
-            'end': end_position,
-        })
+            'full_link': markdown_text[abs_link_start:abs_link_end],
+            'start': abs_link_start,
+            'end': abs_link_end,
+        }
+        results.append(result)
+        text = text[link_end:]
     return results
 
 
