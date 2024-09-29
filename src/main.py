@@ -357,7 +357,8 @@ class TaskMaster:
         self._inject_extra_checkboxes()
         self._move_completed_tasks()
         self._update_checkboxes_status()
-        self._process_links()
+        self._generate_new_links()
+        self._process_unused_files()
         self._inject_ongoing_overview()
         self._trim_lines()
 
@@ -564,7 +565,7 @@ class TaskMaster:
         else:
             d.insert_all(content_insertion_line, lines)
 
-    def _process_links(self):
+    def _generate_new_links(self):
         def to_file_name(input_string: str) -> str:
             replacement_char = '_'
             # Remove leading and trailing whitespace
@@ -616,17 +617,12 @@ class TaskMaster:
                     match['processed_link'] = processed_link
 
             return hyperlinks
-        used_link_lines = {}
 
         for i, line in enumerate(self._doc.lines()):
             line_links = process_hyperlinks(i, document.get_links(line))
 
             for h in sort_by_end(line_links):
                 new_link = h.get('processed_link', None)
-                l = h.get('processed_link', h['link'])
-                link_lines = used_link_lines.get(l, set())
-                link_lines.add(i)
-                used_link_lines[l] = link_lines
 
                 if new_link:
                     prefix = ''
@@ -637,6 +633,19 @@ class TaskMaster:
                     line = line[:h['start']] + full_link + line[h['end']:]
                     self._doc.update(i, line)
 
+    def _process_unused_files(self):
+        used_link_lines = {}
+
+        for i, line in enumerate(self._doc.lines()):
+            line_links = document.get_links(line)
+
+            for h in sort_by_end(line_links):
+                link = h['link']
+                link_lines = used_link_lines.get(link, set())
+                link_lines.add(i)
+                used_link_lines[link] = link_lines
+
+        self._process_unused(used_link_lines)
         existing_files: [str] = self._gather_existing_files()
         existing_files = list(filter(lambda f: not f.endswith('/.DS_Store'), existing_files))
 
@@ -645,7 +654,6 @@ class TaskMaster:
 
         unused_files: [str] = list(filter(is_unused, existing_files))
         self._prepare_unused(unused_files)
-        self._process_unused(used_link_lines)
 
     def get_unused_files_topic(self) -> {}:
         return self._doc.get_topic_by_title(UNUSED_FILES_TOPIC)
