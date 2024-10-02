@@ -10,4 +10,8 @@ git checkout branch_name
     - [x] subtask#1
     - [ ] 
 - [ ] big task#2
+- [x] a task deep nesting
+    - [x] lvl#1.0
+        - [x] lvl2.0
+        - [x] lvl2.1
 - [ ] 

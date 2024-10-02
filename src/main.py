@@ -145,7 +145,7 @@ class TaskMaster:
                     all_completed = False
 
             for gl in self._doc.lines()[start:end + 1]:
-                if not gl.startswith(group_padding + '- [x]'):
+                if not document.is_checkbox(gl, status='x'):
                     all_completed = False
 
             if all_completed:
