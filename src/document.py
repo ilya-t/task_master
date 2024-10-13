@@ -339,7 +339,7 @@ class Document:
             }
 
             if last:
-                last['children'].append(new)
+                new['children'].append(last)
 
             if not result:
                 result = new
