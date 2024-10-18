@@ -459,7 +459,7 @@ def get_links(markdown_text: str) -> []:
         if link_start < 0:
             break
 
-        if link_start > 1 and text[link_start-1] == '!':
+        if link_start > 0 and text[link_start-1] == '!':
             link_start = link_start - 1
             text = text[link_start + 2:]
             link_length = 2
