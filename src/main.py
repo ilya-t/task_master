@@ -268,6 +268,68 @@ class TaskMaster:
             self._doc.insert_all(index=task_start, lines=new_task_lines)
         pass
 
+    def prepare_ongoing_topic_lines(self, tasks: [], level: int = 0) -> [{}]:
+        def find_single_ongoing_checkbox_line(task: {}) -> int:
+            candidate = -1
+            for c in task['children']:
+                li = c.get('line_index', -1)
+                if li == -1:
+                    continue
+                l = self._doc.line(li)
+                if not document.is_checkbox(l):
+                    return -1
+
+                if document.is_checkbox(l, status=document.STATUS_IN_PROGRESS):
+                    if candidate != -1:
+                        return -1
+
+                    inner_checkbox = find_single_ongoing_checkbox_line(c)
+
+                    if inner_checkbox >= 0:
+                        candidate = inner_checkbox
+                    else:
+                        candidate = li
+
+            return candidate
+
+        results = []
+        for task in tasks:
+            indent = "    " * level
+            topic_title = task['title'].strip()
+            if topic_title.startswith('[[') and topic_title.endswith(']]'):
+                topic_title = topic_title.removeprefix('[[').removesuffix(']]')
+
+            if 'line_index' in task and document.is_task(self._doc.line(task['line_index'])):
+                ongoing_checkbox_index = find_single_ongoing_checkbox_line(task)
+                if ongoing_checkbox_index >= 0:
+                    results.append(
+                        {
+                            'indent': indent,
+                            'title': topic_title,
+                            'line_index': ongoing_checkbox_index,
+                        }
+                    )
+                    continue
+
+            if len(task['children']) == 0:
+                results.append(
+                    {
+                        'indent': indent,
+                        'title': topic_title,
+                        'line_index': task['line_index'],
+                    }
+                )
+
+            else:
+                results.append(
+                    {
+                        'indent': indent,
+                        'title': topic_title,
+                    }
+                )
+            results.extend(self.prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
+        return results
+
     def _inject_ongoing_overview(self):
         def filter_ongoing(tasks: []) -> []:
             active_tasks = []
@@ -278,32 +340,6 @@ class TaskMaster:
                     t['children'] = active_children
                     active_tasks.append(t)
             return active_tasks
-
-        def prepare_lines(tasks: [], level: int = 0) -> [{}]:
-            results = []
-            for task in tasks:
-                indent = "    " * level
-                topic_title = task['title'].strip()
-                if topic_title.startswith('[[') and topic_title.endswith(']]'):
-                    topic_title = topic_title.removeprefix('[[').removesuffix(']]')
-                if len(task['children']) == 0:
-                    results.append(
-                        {
-                            'indent': indent,
-                            'title': topic_title,
-                            'line_index': task['line_index'],
-                        }
-                    )
-
-                else:
-                    results.append(
-                        {
-                            'indent': indent,
-                            'title': topic_title,
-                        }
-                    )
-                results.extend(prepare_lines(tasks=task['children'], level=level + 1))
-            return results
 
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
 
@@ -322,7 +358,7 @@ class TaskMaster:
         if unused:
             start = unused['end']
 
-        raw_lines: [{}] = prepare_lines(ongoing_tasks)
+        raw_lines: [{}] = self.prepare_ongoing_topic_lines(ongoing_tasks)
         lines: [str] = []
         ongoing_topic_height: int = len(raw_lines) + 3
         # static +3:

@@ -1,6 +1,5 @@
 # >>> (Active) <<<
-- root
-    - [work in progress](main.md#L6)
+- [root](main.md#L5)
 
 # [ ] [[root]]
 - [-] work in progress 
