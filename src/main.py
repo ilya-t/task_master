@@ -29,6 +29,7 @@ UNUSED_FILES_TOPIC = 'unused local files (complete to delete all)'
 UNUSED_FILES = f'# [ ] {UNUSED_FILES_TOPIC}'
 ACTIVE_TASKS_OVERVIEW_TOPIC = '>>> (Active) <<<'
 ACTIVE_TASKS_OVERVIEW = f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}'
+REMINDERS_TOPIC = '>>> (Reminders) <<<'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 
@@ -268,7 +269,26 @@ class TaskMaster:
             self._doc.insert_all(index=task_start, lines=new_task_lines)
         pass
 
-    def prepare_ongoing_topic_lines(self, tasks: [], level: int = 0) -> [{}]:
+    def _prepare_reminders_topic_lines(self, reminders: []) -> [{}]:
+        results = []
+
+        if len(reminders) == 0:
+            return results
+
+        results.append({
+            'title': f'# {REMINDERS_TOPIC}',
+        })
+
+        for r in reminders:
+            results.append({
+                'indent': '',
+                'title': r['title'],
+                'line_index': r['line_index'],
+            })
+
+        return results
+
+    def _prepare_ongoing_topic_lines(self, tasks: [], level: int = 0) -> [{}]:
         def find_single_ongoing_checkbox_line(task: {}) -> int:
             candidate = -1
             for c in task['children']:
@@ -327,28 +347,47 @@ class TaskMaster:
                         'title': topic_title,
                     }
                 )
-            results.extend(self.prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
+            results.extend(self._prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
         return results
 
-    def _inject_ongoing_overview(self):
-        def filter_ongoing(tasks: []) -> []:
-            active_tasks = []
-            for t in tasks:
-                active = t['status'] == document.STATUS_IN_PROGRESS
-                active_children = filter_ongoing(t['children'])
-                if active or len(active_children) > 0:
-                    t['children'] = active_children
-                    active_tasks.append(t)
-            return active_tasks
+    def _process_and_extract_ongoing_reminders(self, tasks_tree: []) -> []:
+        results = []
+        today = datetime.now()
 
+        for t in tasks_tree:
+            if t['status'] == document.STATUS_URGENT:
+                date, error = document.extract_reminder_date(t['title'])
+
+                if len(error) > 0:
+                    self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
+
+                if date and date.date() <= today.date():
+                    results.append(t)
+
+            results.extend(self._process_and_extract_ongoing_reminders(t['children']))
+
+        return results
+
+    def _sort_reminders(self, reminders: []) -> []:
+        reminders.sort(key=lambda r: document.extract_reminder_date(r['title'])[0] or datetime.max)
+        return reminders
+
+    def _inject_ongoing_overview(self):
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
 
         if existing:
             self._doc.remove(existing['start'], existing['end'])
 
-        ongoing_tasks = filter_ongoing(self._doc.as_tasks_tree())
+        existing = self._doc.get_topic_by_title(REMINDERS_TOPIC)
 
-        if len(ongoing_tasks) == 0:
+        if existing:
+            self._doc.remove(existing['start'], existing['end'])
+
+        ongoing_tasks = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_IN_PROGRESS)
+        all_reminders = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
+        active_reminders = self._sort_reminders(self._process_and_extract_ongoing_reminders(all_reminders))
+
+        if len(ongoing_tasks) == 0 and len(active_reminders) == 0:
             # Not so much is going on!
             return
 
@@ -358,11 +397,16 @@ class TaskMaster:
         if unused:
             start = unused['end']
 
-        raw_lines: [{}] = self.prepare_ongoing_topic_lines(ongoing_tasks)
+        raw_lines: [{}] = self._prepare_ongoing_topic_lines(ongoing_tasks)
+        if len(raw_lines) > 0:
+            raw_lines.insert(0, {
+                'title': f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}',
+            })
+        raw_lines.extend(self._prepare_reminders_topic_lines(active_reminders))
+
         lines: [str] = []
-        ongoing_topic_height: int = len(raw_lines) + 3
-        # static +3:
-        # 1 for title,
+        ongoing_topic_height: int = len(raw_lines) + 2
+        # static +2:
         # 1 for space after topic,
         # 1 for static shift cause file first line is not 0
         for r in raw_lines:
@@ -372,9 +416,10 @@ class TaskMaster:
                     f"{r['indent']}- [{r['title']}]({os.path.basename(self._config_file)}#L{shifted_index})"
                 )
             else:
-                lines.append(f"{r['indent']}- {r['title']}")
-
-        lines.insert(0, f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}')
+                if 'indent' in r:
+                    lines.append(f"{r['indent']}- {r['title']}")
+                else:
+                    lines.append(r['title'])
         self._doc.insert_all(start, lines)
         pass
 
@@ -1110,6 +1155,44 @@ class TaskMaster:
                     continue
                 excluded_checkbox = document.get_padding(line) + '-' + line[line.index(']') + 1:]
                 self._doc.update(i, excluded_checkbox)
+        pass
+
+    def _inject_reminders(self):
+        existing = self._doc.get_topic_by_title(REMINDERS_TOPIC)
+
+        if existing:
+            self._doc.remove(existing['start'], existing['end'])
+
+        urgent_tasks = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
+
+        if len(urgent_tasks) == 0:
+            # Not so much is going on!
+            return
+
+        start = 0
+
+        unused = self._doc.get_topic_by_title(UNUSED_FILES_TOPIC)
+        if unused:
+            start = unused['end']
+
+        raw_lines: [{}] = self.prepare_ongoing_topic_lines(urgent_tasks)
+        lines: [str] = []
+        ongoing_topic_height: int = len(raw_lines) + 3
+        # static +3:
+        # 1 for title,
+        # 1 for space after topic,
+        # 1 for static shift cause file first line is not 0
+        for r in raw_lines:
+            if 'line_index' in r:
+                shifted_index = r['line_index'] + ongoing_topic_height
+                lines.append(
+                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._config_file)}#L{shifted_index})"
+                )
+            else:
+                lines.append(f"{r['indent']}- {r['title']}")
+
+        lines.insert(0, f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}')
+        self._doc.insert_all(start, lines)
         pass
 
 

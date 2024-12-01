@@ -1,7 +1,10 @@
 import os
 import re
+from datetime import datetime
+from typing import Union, Tuple, Optional
 
 STATUS_IN_PROGRESS = '-'
+STATUS_URGENT = '!'
 STATUS_OPEN = ' '
 
 
@@ -545,3 +548,32 @@ def as_nested_dict(intervals: []) -> []:
         # re-balance tree
         parent['children'] = as_nested_dict(parent['children'])
     return roots
+
+
+def filter_tasks_tree(tasks: [], status: str) -> []:
+    results = []
+    for t in tasks:
+        active = t['status'] == status
+        active_children = filter_tasks_tree(t['children'], status)
+        if active or len(active_children) > 0:
+            t['children'] = active_children
+            results.append(t)
+    return results
+
+
+def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
+    line = line.lstrip()
+    content = line.split(':', 1)[0].strip()
+
+    date_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\b', content)
+    if not date_match:
+        return None, "Invalid date format! Expecting YYYY.MM.DD!"
+
+    date_str = date_match.group()
+
+    try:
+        date_obj = datetime.strptime(date_str, '%Y.%m.%d')  # Validate date
+    except ValueError:
+        return None, "Invalid date format! Incorrect day or month."
+
+    return date_obj, ""
