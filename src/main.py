@@ -405,10 +405,11 @@ class TaskMaster:
         raw_lines.extend(self._prepare_reminders_topic_lines(active_reminders))
 
         lines: [str] = []
-        ongoing_topic_height: int = len(raw_lines) + 2
-        # static +2:
-        # 1 for space after topic,
-        # 1 for static shift cause file first line is not 0
+        space_after_ongoing = 1 if len(ongoing_tasks) > 0 else 0
+        space_after_reminders = 1 if len(active_reminders) > 0 else 0
+
+        ongoing_topic_height: int = len(raw_lines) + space_after_ongoing + space_after_reminders + 1
+        # +1 for static shift cause file first line is not 0
         for r in raw_lines:
             if 'line_index' in r:
                 shifted_index = r['line_index'] + ongoing_topic_height
