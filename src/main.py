@@ -2,8 +2,8 @@ import argparse
 import os
 import re
 import shutil
-import subprocess
 import time
+import urllib
 import uuid
 from datetime import datetime
 from typing import Callable
@@ -533,7 +533,7 @@ class TaskMaster:
             if not prepared:
                 continue
 
-            specs = get_insertion_specs(t)#
+            specs = get_insertion_specs(t)
             insertions.append(specs)
             checkbox_line = self._find_checkbox_by_address(specs['address'])
             if checkbox_line >= 0:
@@ -727,7 +727,7 @@ class TaskMaster:
                 link_lines.add(i)
                 used_link_lines[link] = link_lines
 
-        self._process_unused(used_link_lines)
+        self._move_unused_to_bin(used_link_lines)
         existing_files: [str] = self._gather_existing_files()
         existing_files = list(filter(lambda f: not f.endswith('/.DS_Store'), existing_files))
 
@@ -735,12 +735,12 @@ class TaskMaster:
             return f not in used_link_lines
 
         unused_files: [str] = list(filter(is_unused, existing_files))
-        self._prepare_unused(unused_files)
+        self._update_unused_topic(unused_files)
 
     def get_unused_files_topic(self) -> {}:
         return self._doc.get_topic_by_title(UNUSED_FILES_TOPIC)
 
-    def _prepare_unused(self, unused: [str]):
+    def _update_unused_topic(self, unused: [str]):
         if len(unused) == 0:
             return
 
@@ -751,23 +751,27 @@ class TaskMaster:
                 '',
             ]
             self._doc.insert_all(0, lines)
-            start = 0
-        else:
-            start = topic['start']
+            topic = self.get_unused_files_topic()
 
+        start = topic['start']
+        existing_lines = self._doc.get_topic_lines(topic)
         for u in unused:
-            self._doc.insert(start + 1, '- [ ] [complete to delete](' + u + ')')
+            encoded = urllib.parse.quote(u)
+            l = f'- [ ] [complete to delete]({encoded})'
+            if l not in existing_lines:
+                self._doc.insert(start + 1, l)
 
-    def _process_unused(self, used_links_topics: {}):
-        def used_outside_unused_files_topic(link: str) -> bool:
-            used_in: set = used_links_topics.get(link, set())
-            for used_link_line_index in used_in:
-                if used_link_line_index < topic['start']:
-                    return True
-                if used_link_line_index > topic['end']:
-                    return True
-            return False
+    def _used_outside_unused_files_topic(self, used_links_topics: {}, link: str) -> bool:
+        topic = self.get_unused_files_topic()
+        used_in: set = used_links_topics.get(link, set())
+        for used_link_line_index in used_in:
+            if used_link_line_index < topic['start']:
+                return True
+            if used_link_line_index > topic['end']:
+                return True
+        return False
 
+    def _move_unused_to_bin(self, used_links_topics: {}):
         topic = self.get_unused_files_topic()
         if not topic:
             return
@@ -785,11 +789,12 @@ class TaskMaster:
                 continue
 
             link = links[0]['link']
-            if used_outside_unused_files_topic(link):
+            if self._used_outside_unused_files_topic(used_links_topics, link):
                 self._doc.remove_line(i)
                 continue
 
-            src = to_abs_path(self._config_file, link)
+            decoded_link = urllib.parse.unquote(link)
+            src = to_abs_path(self._config_file, decoded_link)
             is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(config_files)
             if is_local_config_file and os.path.exists(src):
                 mem_dir = self._memories_dir + '/deleted_files'
