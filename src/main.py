@@ -356,12 +356,18 @@ class TaskMaster:
 
         for t in tasks_tree:
             if t['status'] == document.STATUS_URGENT:
+                raw_line = self._doc.line(t['line_index'])
+                formatted_line: str = document.format_reminder_date(raw_line)
+
+                if formatted_line:
+                    self._doc.update(t['line_index'], formatted_line)
+
                 date, error = document.extract_reminder_date(t['title'])
 
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
 
-                if date and date.date() <= today.date():
+                if date and date <= today:
                     results.append(t)
 
             results.extend(self._process_and_extract_ongoing_reminders(t['children']))

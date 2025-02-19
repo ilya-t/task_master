@@ -561,19 +561,40 @@ def filter_tasks_tree(tasks: [], status: str) -> []:
     return results
 
 
+def format_reminder_date(line: str) -> Optional[str]:
+    content = line.split(': ', 1)[0]
+    date_with_time_match = re.search(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content)
+
+    if date_with_time_match:
+        return None
+
+    time_only_match = re.search(r'\b\d{2}:\d{2}\b', content)
+
+    if not time_only_match:
+        return None
+
+    date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
+    formatted = line.replace(time_only_match.group(), date_str, 1)
+    return formatted
+
+
 def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
     line = line.lstrip()
-    content = line.split(':', 1)[0].strip()
+    content = line.split(': ', 1)[0].strip()
 
-    date_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\b', content)
-    if not date_match:
-        return None, "Invalid date format! Expecting YYYY.MM.DD!"
+    date_with_time_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content)
+    date_only_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\b', content)
+    time_only_match = re.match(r'\b\d{2}:\d{2}\b', content)
 
-    date_str = date_match.group()
+    date_str = None
+    if date_with_time_match:
+        date_str = date_with_time_match.group()
+    elif date_only_match:
+        date_str = date_only_match.group() + ' 00:00'
+    elif time_only_match:
+        date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
 
-    try:
-        date_obj = datetime.strptime(date_str, '%Y.%m.%d')  # Validate date
-    except ValueError:
-        return None, "Invalid date format! Incorrect day or month."
-
+    if not date_str:
+        return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, or HH:mm!"
+    date_obj = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
     return date_obj, ""
