@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import re
 import shutil
@@ -68,10 +69,13 @@ class TaskMaster:
                  archived_links_processor: str = None,
                  timestamp_provider: Callable[[], int] = current_timestamp,
                  executions_logfile: str = None,
-                 memories_dir: str = None) -> None:
+                 memories_dir: str = None,
+                 configs_file: str = None,
+                 ) -> None:
         super().__init__()
         self._timestamp_provider = timestamp_provider
         self._config_file = taskflow_file
+        self._configs_file = configs_file
         self._history_file = history_file
         self._doc = document.Document(self._config_file)
         if memories_dir:
@@ -430,6 +434,26 @@ class TaskMaster:
         self._doc.insert_all(start, lines)
         pass
 
+    def _fix_typos(self):
+        if not self._configs_file:
+            return
+
+        if not os.path.exists(self._configs_file):
+            return
+
+        with open(self._configs_file, 'r') as file:
+            configs = json.load(file)
+
+        typos: {} = configs.get('typos', {})
+
+        if len(typos) == 0:
+            return
+
+        for i, line in enumerate(self._doc.lines()):
+            for wrong, correct in typos.items():
+                if wrong in line:
+                    self._doc.update(i, line.replace(wrong, correct))
+
     def execute(self):
         self._execute()
         self._try_wait_executions()
@@ -438,6 +462,7 @@ class TaskMaster:
             self._doc.save()
 
     def _execute(self):
+        self._fix_typos()
         self._untitled_to_tasks()
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
@@ -1243,6 +1268,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Captures and outputs all clipboard.')
     parser.add_argument('--archive', metavar='file', type=str,
                         help='Path to archive file that will be used by default when tasks are completed.')
+    parser.add_argument('--config', metavar='file', type=str,
+                        help='Path to config file with extra features like typos and etc..')
     parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
                         help='specifies a links processor that will be triggered when tasks are archived')
     parser.add_argument('task_file', help='Path to file for processing', type=str)
@@ -1278,6 +1305,7 @@ def main():
                archived_links_processor=args.experimental_archived_links_processor,
                executions_logfile=args.executions_log,
                memories_dir=args.memories_dir,
+               configs_file=args.config,
                ).execute()
 
 
