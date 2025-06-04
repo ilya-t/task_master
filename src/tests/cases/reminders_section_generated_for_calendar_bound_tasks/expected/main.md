@@ -11,7 +11,7 @@
 - [ ] plain task
 - [!] 2024.11.05: never forget
 - [!] 2022.02.15: cause my mind has lost direction
-- [!] 2023-01-05: may the force **(Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, or HH:mm!)**
+- [!] 2023-01-05: may the force **(Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON)**
 - [!] 2023.04.01 13:45: timing is urgent
 - [-] ongoing task
 - [ ] 

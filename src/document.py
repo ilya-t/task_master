@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Union, Tuple, Optional
 
 STATUS_IN_PROGRESS = '-'
@@ -563,20 +563,42 @@ def filter_tasks_tree(tasks: [], status: str) -> []:
 
 def format_reminder_date(line: str) -> Optional[str]:
     content = line.split(': ', 1)[0]
-    date_with_time_match = re.search(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content)
 
-    if date_with_time_match:
+    # Already formatted full date+time
+    if re.search(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content):
         return None
 
+    # Relative: +Nm
+    rel_min_match = re.search(r'\+(\d+)m\b', content)
+    if rel_min_match:
+        delta = timedelta(minutes=int(rel_min_match.group(1)))
+        dt = datetime.now() + delta
+        return line.replace(rel_min_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
+
+    # Relative: +Nh
+    rel_hr_match = re.search(r'\+(\d+)h\b', content)
+    if rel_hr_match:
+        delta = timedelta(hours=int(rel_hr_match.group(1)))
+        dt = datetime.now() + delta
+        return line.replace(rel_hr_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
+
+    # Weekday: MON (next Monday)
+    weekday_match = re.search(r'\bMON\b', content, re.IGNORECASE)
+    if weekday_match:
+        today = datetime.now()
+        days_ahead = (0 - today.weekday() + 7) % 7  # 0 is Monday
+        days_ahead = 7 if days_ahead == 0 else days_ahead  # Ensure it's the *next* Monday
+        dt = today + timedelta(days=days_ahead)
+        dt = dt.replace(hour=9, minute=0, second=0, microsecond=0)
+        return line.replace(weekday_match.group(0), dt.strftime('%Y.%m.%d'), 1)
+
+    # Time only: HH:mm
     time_only_match = re.search(r'\b\d{2}:\d{2}\b', content)
+    if time_only_match:
+        date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
+        return line.replace(time_only_match.group(), date_str, 1)
 
-    if not time_only_match:
-        return None
-
-    date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
-    formatted = line.replace(time_only_match.group(), date_str, 1)
-    return formatted
-
+    return None
 
 def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
     line = line.lstrip()
@@ -595,6 +617,6 @@ def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
         date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
 
     if not date_str:
-        return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, or HH:mm!"
+        return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
     date_obj = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
     return date_obj, ""
