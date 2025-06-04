@@ -3,7 +3,7 @@ import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
-import pyperclip
+import xerox
 import main
 import shutil
 import os
@@ -94,7 +94,7 @@ class TestTaskMaster(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        pyperclip.copy('main.files')
+        xerox.copy('main.files')
         os.environ[main.WAIT_EXECUTIONS_ENV] = 'true'
 
     def tearDown(self):

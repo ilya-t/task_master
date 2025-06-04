@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Callable
 
-import pyperclip
+import xerox
 from PIL import ImageGrab  # pip install pillow==10.0.0
 
 import document
@@ -718,7 +718,7 @@ class TaskMaster:
                         if not paste_image(abs_link):
                             processed_link = '<no image in clipboard>'
                     else:
-                        clip = pyperclip.paste()
+                        clip = xerox.paste()
                         lines = []
                         if clip:
                             lines.append(clip)
