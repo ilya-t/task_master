@@ -2,3 +2,4 @@ operations.log
 executions.log
 .bashrc
 venv
+__pycache__
