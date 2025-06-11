@@ -3,8 +3,8 @@ import time
 import unittest
 
 from parameterized import parameterized  # pip3 install parameterized # ?
-import xerox
 import main
+import clipboard
 import shutil
 import os
 import filecmp
@@ -62,7 +62,7 @@ def prepare_artifact(src: str, dst: str):
     pass
 
 
-def run_task_master_at(test_dir: str):
+def run_task_master_at(test_dir: str, clip: clipboard.ClipboardCompanion):
     def read_exec_script(test_dir: str) -> str:
         script_path = test_dir + '/main.sh'
         if os.path.exists(script_path):
@@ -79,6 +79,7 @@ def run_task_master_at(test_dir: str):
         main.TaskMaster(
             taskflow_file=f'{test_dir}/main.md',
             history_file=f'{test_dir}/archive.md',
+            clipboard=clip,
         ).execute()
     pass
 
@@ -92,11 +93,14 @@ class TestTaskMaster(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        xerox.copy('main.files')
+        os.environ['CI'] = 'true'
+        self.clipboard = clipboard.build_clipboard_companion()
+        self.clipboard.copy('main.files')
         os.environ[main.WAIT_EXECUTIONS_ENV] = 'true'
 
     def tearDown(self):
         super().tearDown()
+        os.unsetenv('CI')
         os.unsetenv(main.WAIT_EXECUTIONS_ENV)
 
     def _run_testcase(self, case_path: str):
@@ -105,7 +109,7 @@ class TestTaskMaster(unittest.TestCase):
         test_executions = case_path + '/test_executions.log'
         prepare_artifact(src=case_path + '/executions.log',
                          dst=test_executions)
-        run_task_master_at(test_dir)
+        run_task_master_at(test_dir, self.clipboard)
 
         self.assertEqual(
             read_file(case_path + '/expected/main.md'),
