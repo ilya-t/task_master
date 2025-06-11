@@ -10,8 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Callable
 
-import xerox
-from PIL import ImageGrab  # pip install pillow==10.0.0
+from clipboard import ClipboardCompanion, build_clipboard_companion
 
 import document
 import shell
@@ -51,21 +50,6 @@ def current_timestamp() -> int:
     return int(time.time())
 
 
-def paste_image(file_path: str) -> bool:
-    try:
-        image = ImageGrab.grabclipboard()
-    except Exception as e:
-        print("An error occurred during image paste:", e)
-        traceback.print_exc()
-        return False
-
-    if image is not None:
-        parent = os.path.dirname(file_path)
-        os.makedirs(parent, exist_ok=True)
-        image.save(file_path, 'PNG')
-        return True
-
-    return False
 
 
 class TaskMaster:
@@ -77,6 +61,7 @@ class TaskMaster:
                  executions_logfile: str = None,
                  memories_dir: str = None,
                  configs_file: str = None,
+                 clipboard: ClipboardCompanion | None = None,
                  ) -> None:
         super().__init__()
         self._timestamp_provider = timestamp_provider
@@ -94,6 +79,10 @@ class TaskMaster:
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
         self._shell_launches = []
+        if clipboard:
+            self._clipboard = clipboard
+        else:
+            self._clipboard = build_clipboard_companion()
 
     def _untitled_to_tasks(self) -> None:
         if self._doc.lines()[0].startswith('# '):
@@ -721,10 +710,10 @@ class TaskMaster:
                     processed_link = self._process_shell_request(line_index, title, link)
                 elif generate_file:
                     if is_picture_ref:
-                        if not paste_image(abs_link):
+                        if not self._clipboard.paste_image(abs_link):
                             processed_link = '<no image in clipboard>'
                     else:
-                        clip = xerox.paste()
+                        clip = self._clipboard.paste_text()
                         lines = []
                         if clip:
                             lines.append(clip)
@@ -1312,6 +1301,7 @@ def main():
                executions_logfile=args.executions_log,
                memories_dir=args.memories_dir,
                configs_file=args.config,
+               clipboard=build_clipboard_companion(),
                ).execute()
 
 
