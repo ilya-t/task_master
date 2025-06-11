@@ -1112,7 +1112,7 @@ def get_topic_text_height(d: document.Document, start: int) -> int:
     return i
 
 
-if __name__ == "__main__":
+def main():
     args = parse_args()
     TaskMaster(taskflow_file=args.task_file,
                history_file=args.archive,
@@ -1120,3 +1120,7 @@ if __name__ == "__main__":
                executions_logfile=args.executions_log,
                memories_dir=args.memories_dir,
                ).execute()
+
+
+if __name__ == "__main__":
+    main()
