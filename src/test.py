@@ -14,6 +14,7 @@ import shell
 python_script_path = os.path.dirname(__file__)
 
 TASK_MASTER_APP_VAR = '$task_master'
+NOT_SUPPORTED_PREFIX = 'NOT SUPPORTED YET!'
 
 def file_compare(file1, file2):
     with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
@@ -42,15 +43,10 @@ def get_test_cases() -> [str, str]:
     cases = []
 
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
-    cases.extend(scan_cases(python_script_path + '/tests/future', prefix='NOT SUPPORTED YET!'))
+    cases.extend(scan_cases(python_script_path + '/tests/future', prefix=NOT_SUPPORTED_PREFIX))
     # debug filtering
     # cases = list(filter(lambda c: c[0].endswith('active'), cases))
     return cases
-
-
-def test_time() -> int:
-    return 3371810400
-
 
 def prepare_artifact(src: str, dst: str):
     if os.path.exists(dst):
@@ -90,6 +86,8 @@ def run_task_master_at(test_dir: str):
 class TestTaskMaster(unittest.TestCase):
     @parameterized.expand(get_test_cases())
     def test_cases(self, _: str, case_path: str):
+        if _.startswith(NOT_SUPPORTED_PREFIX):
+            self.skipTest('Not supported yet')
         self._run_testcase(case_path)
 
     def setUp(self):
