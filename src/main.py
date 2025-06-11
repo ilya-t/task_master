@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import time
+import traceback
 import urllib
 import uuid
 from datetime import datetime
@@ -51,7 +52,12 @@ def current_timestamp() -> int:
 
 
 def paste_image(file_path: str) -> bool:
-    image = ImageGrab.grabclipboard()
+    try:
+        image = ImageGrab.grabclipboard()
+    except Exception as e:
+        print("An error occurred during image paste:", e)
+        traceback.print_exc()
+        return False
 
     if image is not None:
         parent = os.path.dirname(file_path)
