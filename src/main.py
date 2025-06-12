@@ -359,12 +359,12 @@ class TaskMaster:
 
     def _process_and_extract_ongoing_reminders(self, tasks_tree: []) -> []:
         results = []
-        today = datetime.now()
+        today = datetime.fromtimestamp(self._timestamp_provider())
 
         for t in tasks_tree:
             if t['status'] == document.STATUS_URGENT:
                 raw_line = self._doc.line(t['line_index'])
-                formatted_line: str = document.format_reminder_date(raw_line)
+                formatted_line: str = document.format_reminder_date(raw_line, today)
 
                 if formatted_line:
                     self._doc.update(t['line_index'], formatted_line)

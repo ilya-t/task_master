@@ -88,6 +88,7 @@ def run_task_master_at(test_dir: str, clip: clipboard.ClipboardCompanion):
             taskflow_file=f'{test_dir}/main.md',
             history_file=f'{test_dir}/archive.md',
             clipboard=clip,
+            timestamp_provider= lambda: 1761912000 # test time: Friday, 31 October 2025 г., 12:00:00
         ).execute()
     pass
 

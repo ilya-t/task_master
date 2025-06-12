@@ -5,3 +5,7 @@
 - [!] 2023-01-05: may the force
 - [!] 2023.04.01 13:45: timing is urgent
 - [-] ongoing task
+- [!] +2h: remind in 2 hours from now
+- [!] +15: remind in 15 minutes from now
+- [!] 15:00: remind today at 15:00
+- [!] MON: remind next monday

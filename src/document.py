@@ -561,7 +561,7 @@ def filter_tasks_tree(tasks: [], status: str) -> []:
     return results
 
 
-def format_reminder_date(line: str) -> Optional[str]:
+def format_reminder_date(line: str, now: datetime) -> Optional[str]:
     content = line.split(': ', 1)[0]
 
     # Already formatted full date+time
@@ -572,20 +572,20 @@ def format_reminder_date(line: str) -> Optional[str]:
     rel_min_match = re.search(r'\+(\d+)m\b', content)
     if rel_min_match:
         delta = timedelta(minutes=int(rel_min_match.group(1)))
-        dt = datetime.now() + delta
+        dt = now + delta
         return line.replace(rel_min_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
 
     # Relative: +Nh
     rel_hr_match = re.search(r'\+(\d+)h\b', content)
     if rel_hr_match:
         delta = timedelta(hours=int(rel_hr_match.group(1)))
-        dt = datetime.now() + delta
+        dt = now + delta
         return line.replace(rel_hr_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
 
     # Weekday: MON (next Monday)
     weekday_match = re.search(r'\bMON\b', content, re.IGNORECASE)
     if weekday_match:
-        today = datetime.now()
+        today = now
         days_ahead = (0 - today.weekday() + 7) % 7  # 0 is Monday
         days_ahead = 7 if days_ahead == 0 else days_ahead  # Ensure it's the *next* Monday
         dt = today + timedelta(days=days_ahead)
@@ -595,7 +595,7 @@ def format_reminder_date(line: str) -> Optional[str]:
     # Time only: HH:mm
     time_only_match = re.search(r'\b\d{2}:\d{2}\b', content)
     if time_only_match:
-        date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
+        date_str = f"{now.strftime('%Y.%m.%d')} {time_only_match.group()}"
         return line.replace(time_only_match.group(), date_str, 1)
 
     return None
