@@ -675,6 +675,7 @@ class TaskMaster:
         # Extract already archived lines for comparison
         existing_lines: [str] = []
         if len(topic_positions) > 0:
+            # start of the text section for the deepest subtopic
             existing_start = topic_positions[-1] + 1
             existing_height = get_topic_text_height(d, start=existing_start)
             existing_lines = d.lines()[existing_start:existing_start + existing_height]
