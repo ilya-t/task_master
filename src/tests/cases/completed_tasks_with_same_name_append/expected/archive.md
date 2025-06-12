@@ -15,3 +15,11 @@ dive-in:
 ```sh
 git checkout future!
 ```
+
+# existing archive note (with same heading)
+dive-in:
+```sh
+git checkout me
+```
+this into already exists at archive.
+this is a new line to this task.

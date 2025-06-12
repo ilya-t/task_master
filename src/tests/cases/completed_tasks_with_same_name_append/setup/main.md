@@ -8,9 +8,13 @@ dive-in:
 git checkout future!
 ```
 
-# [ ] in-progress
+# [x] existing archive note (with same heading)
 dive-in:
 ```sh
-git checkout branch_name
+git checkout me
 ```
-- [x] already completed task
+this into already exists at archive.
+this is a new line to this task.
+
+# [ ] incomplete
+To be continued...

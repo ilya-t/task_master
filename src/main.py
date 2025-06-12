@@ -669,7 +669,23 @@ class TaskMaster:
             while len(d.lines()[content_insertion_line - 1].strip()) == 0:
                 content_insertion_line = content_insertion_line - 1
 
-        lines: [str] = topic_insertion['lines']
+        lines: [str] = list(topic_insertion['lines'])
+
+        existing_lines = []
+        if len(topic_positions) > 0:
+            existing_start = topic_positions[-1] + 1
+            existing_height = get_topic_text_height(d, start=existing_start)
+            existing_lines = d.lines()[existing_start:existing_start + existing_height]
+            document.trim_trailing_empty_lines(existing_lines)
+
+        document.trim_trailing_empty_lines(lines)
+
+        if len(existing_lines) > 0 and lines[:len(existing_lines)] == existing_lines:
+            lines = lines[len(existing_lines):]
+
+        if len(lines) == 0:
+            return
+
         not_ending_with_blank = len(lines[-1].strip()) > 0
 
         if not_ending_with_blank and (
