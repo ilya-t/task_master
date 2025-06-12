@@ -4,6 +4,7 @@ import traceback
 import xerox
 from PIL import ImageGrab
 
+TEST_ENV_VAR = 'TM_UNDER_TEST'
 
 class ClipboardCompanion:
     """Provides clipboard access for text and images."""
@@ -47,6 +48,6 @@ class DummyClipboardCompanion(ClipboardCompanion):
 
 
 def build_clipboard_companion() -> ClipboardCompanion:
-    if os.environ.get('CI') == 'true':
+    if os.environ.get(TEST_ENV_VAR) == 'true':
         return DummyClipboardCompanion()
     return ClipboardCompanion()

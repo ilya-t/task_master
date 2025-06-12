@@ -93,14 +93,14 @@ class TestTaskMaster(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        os.environ['CI'] = 'true'
+        os.environ[clipboard.TEST_ENV_VAR] = 'true'
         self.clipboard = clipboard.build_clipboard_companion()
         self.clipboard.copy('main.files')
         os.environ[main.WAIT_EXECUTIONS_ENV] = 'true'
 
     def tearDown(self):
         super().tearDown()
-        os.unsetenv('CI')
+        os.unsetenv(clipboard.TEST_ENV_VAR)
         os.unsetenv(main.WAIT_EXECUTIONS_ENV)
 
     def _run_testcase(self, case_path: str):
