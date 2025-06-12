@@ -672,15 +672,7 @@ class TaskMaster:
 
         lines: [str] = list(topic_insertion['lines'])
 
-        # Extract already archived lines for comparison
-        existing_lines: [str] = []
-        if len(topic_positions) > 0:
-            # start of the text section for the deepest subtopic
-            existing_start = topic_positions[-1] + 1
-            existing_height = get_topic_text_height(d, start=existing_start)
-            existing_lines = d.lines()[existing_start:existing_start + existing_height]
-
-        lines = TaskMaster._remove_duplicate_prefix(lines, existing_lines)
+        lines = TaskMaster._remove_duplicate_prefix(lines, d, topic_positions)
 
         if len(lines) == 0:
             return
@@ -697,8 +689,15 @@ class TaskMaster:
             d.insert_all(content_insertion_line, lines)
 
     @staticmethod
-    def _remove_duplicate_prefix(lines: [str], existing_lines: [str]) -> [str]:
-        """Return ``lines`` without the prefix already present in ``existing_lines``."""
+    def _remove_duplicate_prefix(lines: [str], d: document.Document, topic_positions: [int]) -> [str]:
+        """Return ``lines`` minus any portion already stored under the target topic."""
+        existing_lines: [str] = []
+        if len(topic_positions) > 0:
+            # start of the text section for the deepest subtopic
+            existing_start = topic_positions[-1] + 1
+            existing_height = get_topic_text_height(d, start=existing_start)
+            existing_lines = d.lines()[existing_start:existing_start + existing_height]
+
         document.trim_trailing_empty_lines(lines)
         document.trim_trailing_empty_lines(existing_lines)
 
