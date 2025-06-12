@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import time
 import traceback
 import urllib
@@ -79,10 +80,17 @@ class TaskMaster:
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
         self._shell_launches = []
+        self._shell_path = self._determine_shell()
         if clipboard:
             self._clipboard = clipboard
         else:
             self._clipboard = build_clipboard_companion()
+
+    def _determine_shell(self) -> str:
+        for candidate in ['/bin/zsh', '/bin/bash', '/bin/sh']:
+            if os.path.exists(candidate):
+                return candidate
+        return 'sh'
 
     def _untitled_to_tasks(self) -> None:
         if self._doc.lines()[0].startswith('# '):
@@ -981,12 +989,16 @@ class TaskMaster:
             # and clean lines that look like /path/to.files/cmd.log:0
             raw_cmd = title.removeprefix('`').removesuffix('`')
             script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
-            script_lines = ['#!/bin/zsh']
+            script_lines = [f'#!{self._shell_path}']
 
-            shell_rc = os.path.expanduser('~') + '/.zshrc'
-            if os.path.exists(shell_rc):
-                # script_lines.extend(document.read_lines(shell_rc))
-                script_lines.append('source '+shell_rc+' > /dev/null')
+            rc_file = None
+            if self._shell_path.endswith('zsh'):
+                rc_file = os.path.expanduser('~/.zshrc')
+            elif self._shell_path.endswith('bash'):
+                rc_file = os.path.expanduser('~/.bashrc')
+
+            if rc_file and os.path.exists(rc_file):
+                script_lines.append(f'source {rc_file} > /dev/null')
 
             topic = self._doc.get_topic_by_line(line_index)
             # script_lines.append('set -e')
@@ -1002,8 +1014,12 @@ class TaskMaster:
             script_lines.append(raw_cmd)
             document.write_lines(script_path, script_lines)
             os.system('chmod +x '+script_path)
-            cmd = '/bin/zsh -c "' + script_path + ' &> ' + dst + '; echo \'' + dst + ':\'\\$? >> ' + self._executions_logfile + '" &'
-            os.system(cmd)
+            if self._shell_path.endswith('zsh'):
+                cmd = f"{script_path} &> {dst}; echo \"{dst}:$?\" >> {self._executions_logfile}"
+            else:
+                sed_expr = "sed -E 's/: line ([0-9]+): ([^:]+): command not found/:\\1: command not found: \\2/'"
+                cmd = f"{script_path} 2>&1 | {sed_expr} > {dst}; ret=${{PIPESTATUS[0]}}; echo \"{dst}:$ret\" >> {self._executions_logfile}"
+            subprocess.Popen([self._shell_path, '-c', cmd])
             self._shell_launches.append({
                 'cmd': raw_cmd,
                 'output': dst,
@@ -1088,7 +1104,8 @@ class TaskMaster:
                 return processed_links[path]
             if not os.path.exists(path):
                 return path
-            cmd = f'{self._archived_links_processor} "{path}"'
+            processor_shell = '/bin/bash' if os.path.exists('/bin/bash') else self._shell_path
+            cmd = f"{processor_shell} {self._archived_links_processor} \"{path}\""
             output = shell.capture_output(cmd, ignore_errors=True)
             if not output:
                 return None
