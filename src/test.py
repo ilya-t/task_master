@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import time
 import unittest
 
@@ -80,8 +81,10 @@ def run_task_master_at(test_dir: str, clip: clipboard.ClipboardCompanion):
 
     script = read_exec_script(test_dir)
     if script:
-        cmd = f'cd {test_dir}\n' + script.replace(TASK_MASTER_APP_VAR,
-                                                  f'{python_script_path}/venv/bin/python3 {python_script_path}/main.py')
+        cmd = f'cd {test_dir}\n' + script.replace(
+            TASK_MASTER_APP_VAR,
+            f'{sys.executable} {python_script_path}/main.py'
+        )
         print(shell.capture_output(cmd))
     else:
         main.TaskMaster(

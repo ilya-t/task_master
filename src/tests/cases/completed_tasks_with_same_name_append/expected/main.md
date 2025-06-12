@@ -1,6 +1,2 @@
-# [ ] in-progress
-dive-in:
-```sh
-git checkout branch_name
-```
-- [x] already completed task
+# [ ] incomplete
+To be continued...

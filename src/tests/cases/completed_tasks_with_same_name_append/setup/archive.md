@@ -8,3 +8,9 @@ git checkout branch_name
     - subtask#1
 - completed
 
+# existing archive note (with same heading)
+dive-in:
+```sh
+git checkout me
+```
+this into already exists at archive.

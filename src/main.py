@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 import traceback
-import urllib
+import urllib.parse
 import uuid
 from datetime import datetime
 from typing import Callable
@@ -612,8 +612,9 @@ class TaskMaster:
             return '#' * (address_index + 1) + ' ' + address[address_index]
 
         def get_existing_topic_positions() -> [int]:
+            """Return line indexes for headings that already exist in ``d``."""
             lvl = 0
-            positions = []
+            positions: [int] = []
             title = get_title(lvl)
             for i, l in enumerate(d.lines()):
                 if l.rstrip() != title:
@@ -626,7 +627,7 @@ class TaskMaster:
                 title = get_title(lvl)
             return positions
 
-        topic_positions = get_existing_topic_positions()
+        topic_positions: [int] = get_existing_topic_positions()
 
         # add non-existent topic titles
         if len(topic_positions) < len(address):
@@ -670,7 +671,13 @@ class TaskMaster:
             while len(d.lines()[content_insertion_line - 1].strip()) == 0:
                 content_insertion_line = content_insertion_line - 1
 
-        lines: [str] = topic_insertion['lines']
+        lines: [str] = list(topic_insertion['lines'])
+
+        lines = TaskMaster._remove_duplicate_prefix(lines, d, topic_positions)
+
+        if len(lines) == 0:
+            return
+
         not_ending_with_blank = len(lines[-1].strip()) > 0
 
         if not_ending_with_blank and (
@@ -681,6 +688,23 @@ class TaskMaster:
             d.extend(lines)
         else:
             d.insert_all(content_insertion_line, lines)
+
+    @staticmethod
+    def _remove_duplicate_prefix(lines: [str], d: document.Document, topic_positions: [int]) -> [str]:
+        """Return ``lines`` minus any portion already stored under the target topic."""
+        existing_lines: [str] = []
+        if len(topic_positions) > 0:
+            # start of the text section for the deepest subtopic
+            existing_start = topic_positions[-1] + 1
+            existing_height = get_topic_text_height(d, start=existing_start)
+            existing_lines = d.lines()[existing_start:existing_start + existing_height]
+
+        document.trim_trailing_empty_lines(lines)
+        document.trim_trailing_empty_lines(existing_lines)
+
+        if len(existing_lines) > 0 and lines[:len(existing_lines)] == existing_lines:
+            return lines[len(existing_lines):]
+        return lines
 
     def _generate_new_links(self):
         def to_file_name(input_string: str) -> str:
