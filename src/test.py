@@ -137,6 +137,7 @@ class TestTaskMaster(unittest.TestCase):
                 read_file(test_executions),
             )
 
+
     def compare_directories(self, expected_dir: str, actual_dir: str, retry_scan: bool = False):
         comparison = filecmp.dircmp(expected_dir, actual_dir)
         diff = len(comparison.diff_files) + len(comparison.left_only) + len(comparison.right_only)
