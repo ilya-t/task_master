@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 import traceback
-import urllib
+import urllib.parse
 import uuid
 from datetime import datetime
 from typing import Callable
