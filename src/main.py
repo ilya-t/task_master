@@ -756,7 +756,7 @@ class TaskMaster:
             line_links = document.get_links(line)
 
             for h in sort_by_end(line_links):
-                link = h['link']
+                link = urllib.parse.unquote(h['link'])
                 link_lines = used_link_lines.get(link, set())
                 link_lines.add(i)
                 used_link_lines[link] = link_lines
