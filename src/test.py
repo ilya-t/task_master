@@ -11,10 +11,13 @@ import filecmp
 
 import shell
 
-python_script_path = os.path.dirname(__file__)
+# CHANGE THIS VAR TO RUN ONLY SPECIFIC TEST FROM 'SUPPORTED' OR 'FUTURE' SUITE
+LOCAL_TEST_FILTER = ''
 
 TASK_MASTER_APP_VAR = '$task_master'
 NOT_SUPPORTED_PREFIX = 'NOT SUPPORTED YET!'
+
+python_script_path = os.path.dirname(__file__)
 
 def file_compare(file1, file2):
     with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
@@ -32,7 +35,7 @@ def get_test_cases() -> [str, str]:
         path = parent + '/' + dir_name
         return name, path
 
-    def scan_cases(src: str, prefix: str = '') -> []:
+    def scan_cases(src: str, prefix: str = '') -> [str, str]:
         r = []
         for root, dirs, files in os.walk(src):
             if root != src:
@@ -40,12 +43,17 @@ def get_test_cases() -> [str, str]:
             r.extend(map(lambda d: dir_to_case(prefix, root, d), dirs))
         return r
 
-    cases = []
+    use_local_filter = LOCAL_TEST_FILTER != '' and os.getenv('CI', 'false') != 'true'
+    cases: [str, str] = []
 
     cases.extend(scan_cases(python_script_path + '/tests/cases'))
-    cases.extend(scan_cases(python_script_path + '/tests/future', prefix=NOT_SUPPORTED_PREFIX))
-    # debug filtering
-    # cases = list(filter(lambda c: c[0].endswith('active'), cases))
+
+    if use_local_filter:
+        cases.extend(scan_cases(python_script_path + '/tests/future', prefix='FUTURE_'))
+        return list(filter(lambda c: c[0].endswith(LOCAL_TEST_FILTER), cases))
+    else:
+        cases.extend(scan_cases(python_script_path + '/tests/future', prefix=NOT_SUPPORTED_PREFIX))
+
     return cases
 
 def prepare_artifact(src: str, dst: str):
