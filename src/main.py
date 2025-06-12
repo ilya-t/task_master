@@ -17,7 +17,7 @@ import document
 import shell
 from document import get_padding
 from document import is_checkbox
-from document import sort_by_end
+from document import sort_by_end, get_line_title
 from document import sort_by_start
 
 python_script_path = os.path.dirname(__file__)
@@ -368,8 +368,9 @@ class TaskMaster:
 
                 if formatted_line:
                     self._doc.update(t['line_index'], formatted_line)
+                    raw_line = formatted_line
 
-                date, error = document.extract_reminder_date(t['title'])
+                date, error = document.extract_reminder_date(document.get_line_title(raw_line))
 
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
