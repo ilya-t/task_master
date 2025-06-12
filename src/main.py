@@ -679,15 +679,8 @@ class TaskMaster:
             existing_start = topic_positions[-1] + 1
             existing_height = get_topic_text_height(d, start=existing_start)
             existing_lines = d.lines()[existing_start:existing_start + existing_height]
-            # Strip blank lines from the end of the existing block
-            document.trim_trailing_empty_lines(existing_lines)
 
-        # Normalise new lines before insertion
-        document.trim_trailing_empty_lines(lines)
-
-        # Skip duplicate lines when completing the same task again
-        if len(existing_lines) > 0 and lines[:len(existing_lines)] == existing_lines:
-            lines = lines[len(existing_lines):]
+        lines = TaskMaster._remove_duplicate_prefix(lines, existing_lines)
 
         if len(lines) == 0:
             return
@@ -702,6 +695,16 @@ class TaskMaster:
             d.extend(lines)
         else:
             d.insert_all(content_insertion_line, lines)
+
+    @staticmethod
+    def _remove_duplicate_prefix(lines: [str], existing_lines: [str]) -> [str]:
+        """Return ``lines`` without the prefix already present in ``existing_lines``."""
+        document.trim_trailing_empty_lines(lines)
+        document.trim_trailing_empty_lines(existing_lines)
+
+        if len(existing_lines) > 0 and lines[:len(existing_lines)] == existing_lines:
+            return lines[len(existing_lines):]
+        return lines
 
     def _generate_new_links(self):
         def to_file_name(input_string: str) -> str:
