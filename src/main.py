@@ -386,6 +386,20 @@ class TaskMaster:
         reminders.sort(key=lambda r: document.extract_reminder_date(r['title'])[0] or datetime.max)
         return reminders
 
+    def get_active_reminders(self) -> [dict]:
+        """Return reminders that are due at the current timestamp."""
+        all_reminders = document.filter_tasks_tree(
+            self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
+        active = self._sort_reminders(
+            self._process_and_extract_ongoing_reminders(all_reminders))
+        return [
+            {
+                'title': r['title'],
+                'line': r['line_index'] + 1,
+            }
+            for r in active
+        ]
+
     def _inject_ongoing_overview(self):
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
 
@@ -1309,6 +1323,8 @@ def parse_args():
                         help='Path to config file with extra features like typos and etc..')
     parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
                         help='specifies a links processor that will be triggered when tasks are archived')
+    parser.add_argument('--reminders', action='store_true',
+                        help='Print active reminders in JSON format and exit')
     parser.add_argument('task_file', help='Path to file for processing', type=str)
     parser.add_argument('--executions-log',
                         metavar='file', type=str, required=False,
@@ -1337,14 +1353,18 @@ def get_topic_text_height(d: document.Document, start: int) -> int:
 
 def main():
     args = parse_args()
-    TaskMaster(taskflow_file=args.task_file,
-               history_file=args.archive,
-               archived_links_processor=args.experimental_archived_links_processor,
-               executions_logfile=args.executions_log,
-               memories_dir=args.memories_dir,
-               configs_file=args.config,
-               clipboard=build_clipboard_companion(),
-               ).execute()
+    tm = TaskMaster(taskflow_file=args.task_file,
+                    history_file=args.archive,
+                    archived_links_processor=args.experimental_archived_links_processor,
+                    executions_logfile=args.executions_log,
+                    memories_dir=args.memories_dir,
+                    configs_file=args.config,
+                    clipboard=build_clipboard_companion(),
+                    )
+    if args.reminders:
+        print(json.dumps(tm.get_active_reminders()))
+        return
+    tm.execute()
 
 
 if __name__ == "__main__":
