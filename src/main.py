@@ -357,7 +357,7 @@ class TaskMaster:
             results.extend(self._prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
         return results
 
-    def _process_and_extract_ongoing_reminders(self, tasks_tree: []) -> []:
+    def _process_and_extract_reminders(self, tasks_tree: [], active_only: bool) -> []:
         results = []
         today = datetime.fromtimestamp(self._timestamp_provider())
 
@@ -375,10 +375,10 @@ class TaskMaster:
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
 
-                if date and date <= today:
+                if date and (not active_only or date <= today):
                     results.append(t)
 
-            results.extend(self._process_and_extract_ongoing_reminders(t['children']))
+            results.extend(self._process_and_extract_reminders(t['children'], active_only))
 
         return results
 
@@ -386,14 +386,14 @@ class TaskMaster:
         reminders.sort(key=lambda r: document.extract_reminder_date(r['title'])[0] or datetime.max)
         return reminders
 
-    def get_active_reminders(self) -> [dict]:
-        """Return reminders that are due at the current timestamp."""
+    def get_reminders(self, active_only: bool = True) -> [dict]:
+        """Return reminders filtered by due date if ``active_only`` is True."""
         all_reminders = document.filter_tasks_tree(
             self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
-        active = self._sort_reminders(
-            self._process_and_extract_ongoing_reminders(all_reminders))
+        reminders = self._sort_reminders(
+            self._process_and_extract_reminders(all_reminders, active_only))
         result = []
-        for r in active:
+        for r in reminders:
             title = r['title']
             date, _ = document.extract_reminder_date(title)
             timestamp = 0
@@ -418,6 +418,7 @@ class TaskMaster:
             result.append(entry)
         return result
 
+
     def _inject_ongoing_overview(self):
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
 
@@ -431,7 +432,8 @@ class TaskMaster:
 
         ongoing_tasks = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_IN_PROGRESS)
         all_reminders = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
-        active_reminders = self._sort_reminders(self._process_and_extract_ongoing_reminders(all_reminders))
+        active_reminders = self._sort_reminders(
+            self._process_and_extract_reminders(all_reminders, True))
 
         if len(ongoing_tasks) == 0 and len(active_reminders) == 0:
             # Not so much is going on!
@@ -1342,7 +1344,7 @@ def parse_args():
     parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
                         help='specifies a links processor that will be triggered when tasks are archived')
     parser.add_argument('--reminders', action='store_true',
-                        help='Print active reminders in JSON format and exit')
+                        help='Print all reminders in JSON format and exit')
     parser.add_argument('task_file', help='Path to file for processing', type=str)
     parser.add_argument('--executions-log',
                         metavar='file', type=str, required=False,
@@ -1380,7 +1382,7 @@ def main():
                     clipboard=build_clipboard_companion(),
                     )
     if args.reminders:
-        print(json.dumps(tm.get_active_reminders()))
+        print(json.dumps(tm.get_reminders(active_only=False)))
         return
     tm.execute()
 
