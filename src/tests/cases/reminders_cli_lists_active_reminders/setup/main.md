@@ -1,3 +1,5 @@
+- [!] 2026.02.02: task without topic
+
 # this is a topic that contains calendar-bound reminders
 - [ ] plain task
 - [!] 2024.11.05: never forget
