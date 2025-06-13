@@ -264,7 +264,15 @@ class Document:
                     return t
 
         result = []
-        for topic in self.get_topics():
+        topics = self.get_topics()
+        next_start = 0
+        for topic in topics:
+            if topic['start'] > next_start:
+                orphan_groups: [{}] = as_nested_dict(
+                    self.get_check_groups_at_range(next_start, topic['start'] - 1)
+                )
+                for group in orphan_groups:
+                    result.extend(to_tasks(group))
             start = topic['start']
             end = topic['end']
             title = get_line_title(self.line(start))
@@ -288,6 +296,14 @@ class Document:
 
             for group in check_groups:
                 task['children'].extend(to_tasks(group))
+            next_start = end + 1
+
+        if next_start < len(self._lines):
+            orphan_groups: [{}] = as_nested_dict(
+                self.get_check_groups_at_range(next_start, len(self._lines) - 1)
+            )
+            for group in orphan_groups:
+                result.extend(to_tasks(group))
 
         task_with_parent = first_task_with_address(result)
         while task_with_parent:
