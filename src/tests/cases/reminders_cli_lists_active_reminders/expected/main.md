@@ -5,3 +5,4 @@
 - [!] 2023-01-05: may the force
 - [!] 2023.04.01 13:45: timing is urgent
 - [-] ongoing task
+- [!] 2026.01.01: into the future
