@@ -392,13 +392,33 @@ class TaskMaster:
             self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
         active = self._sort_reminders(
             self._process_and_extract_ongoing_reminders(all_reminders))
-        return [
-            {
-                'title': r['title'],
+        result = []
+        for r in active:
+            title = r['title']
+            date, _ = document.extract_reminder_date(title)
+            timestamp = 0
+            if date:
+                ts_date = date
+                if date.hour == 0 and date.minute == 0:
+                    ts_date = date.replace(hour=6)
+                local_ts = int(ts_date.timestamp())
+                shift = int(
+                    datetime.fromtimestamp(self._timestamp_provider())
+                    .astimezone()
+                    .utcoffset()
+                    .total_seconds()
+                )
+                timestamp = local_ts - shift
+            if ': ' in title:
+                title = title.split(': ', 1)[1]
+            entry = {
+                'title': title,
                 'line': r['line_index'] + 1,
             }
-            for r in active
-        ]
+            if timestamp:
+                entry['timestamp_gmt'] = str(timestamp)
+            result.append(entry)
+        return result
 
     def _inject_ongoing_overview(self):
         existing = self._doc.get_topic_by_title(ACTIVE_TASKS_OVERVIEW_TOPIC)
