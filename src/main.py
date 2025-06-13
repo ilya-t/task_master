@@ -399,8 +399,6 @@ class TaskMaster:
             timestamp = 0
             if date:
                 ts_date = date
-                if date.hour == 0 and date.minute == 0:
-                    ts_date = date.replace(hour=6)
                 local_ts = int(ts_date.timestamp())
                 shift = int(
                     datetime.fromtimestamp(self._timestamp_provider())
