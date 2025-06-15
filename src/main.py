@@ -5,7 +5,6 @@ import re
 import shutil
 import subprocess
 import time
-import traceback
 import urllib.parse
 import uuid
 from datetime import datetime
@@ -396,17 +395,7 @@ class TaskMaster:
         for r in reminders:
             title = r['title']
             date, _ = document.extract_reminder_date(title)
-            timestamp = 0
-            if date:
-                ts_date = date
-                local_ts = int(ts_date.timestamp())
-                shift = int(
-                    datetime.fromtimestamp(self._timestamp_provider())
-                    .astimezone()
-                    .utcoffset()
-                    .total_seconds()
-                )
-                timestamp = local_ts - shift
+            timestamp = int(date.timestamp())
             if ': ' in title:
                 title = title.split(': ', 1)[1]
             entry = {
@@ -414,7 +403,7 @@ class TaskMaster:
                 'line': r['line_index'] + 1,
             }
             if timestamp:
-                entry['timestamp_gmt'] = str(timestamp)
+                entry['timestamp'] = str(timestamp)
             result.append(entry)
         return result
 

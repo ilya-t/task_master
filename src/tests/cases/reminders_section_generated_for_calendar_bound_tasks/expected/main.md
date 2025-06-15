@@ -1,11 +1,12 @@
 # >>> (Active) <<<
 - this is a topic that contains calendar-bound reminders
-    - [ongoing task](main.md#L16)
+    - [ongoing task](main.md#L17)
 
 # >>> (Reminders) <<<
-- [2022.02.15: cause my mind has lost direction](main.md#L13)
-- [2023.04.01 13:45: timing is urgent](main.md#L15)
-- [2024.11.05: never forget](main.md#L12)
+- [2022.02.15: cause my mind has lost direction](main.md#L14)
+- [2023.04.01 13:45: timing is urgent](main.md#L16)
+- [2024.11.05: never forget](main.md#L13)
+- [2025.10.31 15:00: remind today at 15:00](main.md#L20)
 
 # this is a topic that contains calendar-bound reminders
 - [ ] plain task
