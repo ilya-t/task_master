@@ -1153,7 +1153,7 @@ class TaskMaster:
             if not os.path.exists(path):
                 return path
             processor_shell = '/bin/bash' if os.path.exists('/bin/bash') else self._shell_path
-            cmd = f"{processor_shell} {self._archived_links_processor} \"{path}\""
+            cmd = f"{processor_shell} -c '{self._archived_links_processor} \"{path}\"'"
             output = shell.capture_output(cmd, ignore_errors=True)
             if not output:
                 return None

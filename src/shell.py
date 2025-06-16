@@ -17,14 +17,18 @@ def get_shell_executions(executions_path: str) -> [{}]:
 
 def capture_output(cmd: str, ignore_errors=False) -> str | None:
     try:
-        return subprocess.check_output(cmd, universal_newlines=True, shell=True)
+        return subprocess.check_output(
+            cmd, 
+            universal_newlines=True, 
+            shell=True, 
+            stderr=subprocess.STDOUT,
+        )
     except subprocess.CalledProcessError as e:
         print(f'Command "{cmd}" failed with error:')
         print(e.output)
         if ignore_errors:
             return None
         raise e
-
 
 def _get_link_with_retcode(src: str, retcode: str) -> str:
     name, ext = os.path.splitext(os.path.basename(src))
