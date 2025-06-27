@@ -616,8 +616,11 @@ def format_reminder_date(line: str, now: datetime) -> Optional[str]:
 
     return None
 
-def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
+def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Optional[datetime], str]:
+    """Parse a reminder date from ``line`` using ``now`` for relative values."""
     line = line.lstrip()
+    if now is None:
+        now = datetime.now()
     content = line.split(': ', 1)[0].strip()
 
     date_with_time_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content)
@@ -630,7 +633,7 @@ def extract_reminder_date(line: str) -> Tuple[Optional[datetime], str]:
     elif date_only_match:
         date_str = date_only_match.group() + ' 00:00'
     elif time_only_match:
-        date_str = f"{datetime.today().strftime('%Y.%m.%d')} {time_only_match.group()}"
+        date_str = f"{now.strftime('%Y.%m.%d')} {time_only_match.group()}"
 
     if not date_str:
         return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
