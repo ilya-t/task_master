@@ -2,6 +2,7 @@ import subprocess
 import sys
 import time
 import unittest
+from datetime import datetime, timezone
 
 from parameterized import parameterized  # pip3 install parameterized # ?
 import main
@@ -19,6 +20,8 @@ TASK_MASTER_APP_VAR = '$task_master'
 NOT_SUPPORTED_PREFIX = 'NOT SUPPORTED YET!'
 
 python_script_path = os.path.dirname(__file__)
+# Switch datetime to UTC timezone
+TEST_DATETIME = datetime(2025, 10, 31, 12, 0, 0, tzinfo=timezone.utc)
 
 def file_compare(file1, file2):
     with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
@@ -91,7 +94,7 @@ def run_task_master_at(test_dir: str, clip: clipboard.ClipboardCompanion):
             taskflow_file=f'{test_dir}/main.md',
             history_file=f'{test_dir}/archive.md',
             clipboard=clip,
-            timestamp_provider= lambda: 1761912000 # test time: Friday, 31 October 2025 г., 12:00:00
+            datetime_provider=lambda: TEST_DATETIME.replace(tzinfo=None),
         ).execute()
     pass
 
@@ -105,6 +108,9 @@ class TestTaskMaster(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
+        os.environ['TZ'] = 'UTC'
+        if hasattr(time, 'tzset'):
+            time.tzset()
         os.environ[clipboard.TEST_ENV_VAR] = 'true'
         self.clipboard = clipboard.build_clipboard_companion()
         self.clipboard.copy('main.files')

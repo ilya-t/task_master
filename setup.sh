@@ -1,7 +1,7 @@
 set -e
 cd src
 rm -rf ./venv
-python3.11 -m venv ./venv
+python3 -m venv ./venv
 source venv/bin/activate
 pip3 install -r ./requirements.txt
 
@@ -12,7 +12,7 @@ cd ..
 
 # exec script generation
 exec_script=./run
-echo "#!$(pwd)/src/venv/bin/python3.11" > $exec_script
+echo "#!$(pwd)/src/venv/bin/python3" > $exec_script
 echo "# FILE IS GENERATED!" >> $exec_script
 echo "import os" >> $exec_script
 echo "import sys" >> $exec_script

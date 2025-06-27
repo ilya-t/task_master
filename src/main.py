@@ -46,8 +46,8 @@ def get_config_files(config_file: str) -> str:
         return path
 
 
-def current_timestamp() -> int:
-    return int(time.time())
+def current_datetime() -> datetime:
+    return datetime.now()
 
 
 
@@ -57,14 +57,14 @@ class TaskMaster:
                  taskflow_file: str,
                  history_file: str,
                  archived_links_processor: str = None,
-                 timestamp_provider: Callable[[], int] = current_timestamp,
+                 datetime_provider: Callable[[], datetime] = current_datetime,
                  executions_logfile: str = None,
                  memories_dir: str = None,
                  configs_file: str = None,
                  clipboard: ClipboardCompanion | None = None,
                  ) -> None:
         super().__init__()
-        self._timestamp_provider = timestamp_provider
+        self._datetime_provider = datetime_provider
         self._config_file = taskflow_file
         self._configs_file = configs_file
         self._history_file = history_file
@@ -96,7 +96,7 @@ class TaskMaster:
         if self._doc.lines()[0].startswith('# '):
             return
 
-        datetime_obj = datetime.fromtimestamp(self._timestamp_provider())
+        datetime_obj = self._datetime_provider()
         current_time = datetime_obj.strftime('%Y.%m.%d ')
 
         self._doc.insert(0, '# [ ] ' + current_time)
@@ -359,7 +359,7 @@ class TaskMaster:
 
     def _process_and_extract_reminders(self, tasks_tree: [], active_only: bool) -> []:
         results = []
-        today = datetime.fromtimestamp(self._timestamp_provider())
+        today = self._datetime_provider()
 
         for t in tasks_tree:
             if t['status'] == document.STATUS_URGENT:
@@ -370,7 +370,7 @@ class TaskMaster:
                     self._doc.update(t['line_index'], formatted_line)
                     raw_line = formatted_line
 
-                date, error = document.extract_reminder_date(document.get_line_title(raw_line))
+                date, error = document.extract_reminder_date(document.get_line_title(raw_line), today)
 
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
@@ -383,7 +383,8 @@ class TaskMaster:
         return results
 
     def _sort_reminders(self, reminders: []) -> []:
-        reminders.sort(key=lambda r: document.extract_reminder_date(r['title'])[0] or datetime.max)
+        now = self._datetime_provider()
+        reminders.sort(key=lambda r: document.extract_reminder_date(r['title'], now)[0] or datetime.max)
         return reminders
 
     def get_reminders(self, active_only: bool = True) -> [dict]:
@@ -393,9 +394,10 @@ class TaskMaster:
         reminders = self._sort_reminders(
             self._process_and_extract_reminders(all_reminders, active_only))
         result = []
+        now = self._datetime_provider()
         for r in reminders:
             title = r['title']
-            date, _ = document.extract_reminder_date(title)
+            date, _ = document.extract_reminder_date(title, now)
             timestamp = int(date.timestamp())
             if ': ' in title:
                 title = title.split(': ', 1)[1]
