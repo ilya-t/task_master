@@ -84,6 +84,7 @@ class TaskMaster:
             self._clipboard = clipboard
         else:
             self._clipboard = build_clipboard_companion()
+        self._cached_execution_completions = {}
 
     def _determine_shell(self) -> str:
         for candidate in ['/bin/zsh', '/bin/bash', '/bin/sh']:
@@ -794,7 +795,12 @@ class TaskMaster:
                     if is_picture_ref:
                         prefix = '!'
                     full_link = prefix + '[' + h['title'] + '](' + new_link + ')'
+                    old_line = line
                     line = line[:h['start']] + full_link + line[h['end']:]
+                    if old_line != line:
+                        print('UPDATING LINE LINK: ')
+                        print('  was:', old_line)
+                        print('  now:', line)
                     self._doc.update(i, line)
 
     def _process_unused_files(self):
@@ -1029,6 +1035,7 @@ class TaskMaster:
                 return
 
     def _process_shell_request(self, line_index: int, title: str, link: str) -> str:
+        # TODO: reduce complexity
         if len(link.strip()) == 0:
             dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
             document.write_lines(dst, lines=['<waiting for output>'])
@@ -1076,20 +1083,24 @@ class TaskMaster:
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
             executions = self._get_shell_executions()
+            link_abs_path: str = to_abs_path(self._config_file, link)
             for e in reversed(executions):
-                if e['file'].endswith(link.removeprefix('.')):  # TODO: not precise file detection
+                if e['file'].endswith(link_abs_path):
                     status: str = e['status']
                     if not status.isdigit():
                         continue
 
-                    src = to_abs_path(self._config_file, link)
+                    cached_completion: str = self._cached_execution_completions.get(link_abs_path, None)
+                    if cached_completion:
+                        return link.removesuffix(os.path.basename(link)) + os.path.basename(cached_completion)
 
-                    if not os.path.exists(src):
+                    if not os.path.exists(link_abs_path):
                         continue
 
-                    dst: str = shell._get_link_with_retcode(src, status)
-                    shutil.move(src, dst)
+                    dst: str = shell._get_link_with_retcode(link_abs_path, status)
+                    shutil.move(link_abs_path, dst)
                     self._remove_execution_results(link)
+                    self._cached_execution_completions[link_abs_path] = dst
                     return link.removesuffix(os.path.basename(link)) + os.path.basename(dst)
             return link
 
@@ -1314,7 +1325,7 @@ def to_abs_path(config_file: str, src_path: str) -> str:
     if src_path.startswith('~'):
         return os.path.expanduser(src_path)
     elif src_path.startswith('./') or src_path.startswith('../'):
-        return os.path.dirname(config_file) + '/' + src_path
+        return os.path.abspath(os.path.join(os.path.dirname(config_file), src_path))
 
     return src_path
 
