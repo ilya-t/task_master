@@ -7,8 +7,8 @@ import subprocess
 import time
 import urllib.parse
 import uuid
-from datetime import datetime
-from typing import Callable
+from datetime import datetime, timedelta
+from typing import Callable, Optional
 
 from clipboard import ClipboardCompanion, build_clipboard_companion
 
@@ -370,11 +370,20 @@ class TaskMaster:
                     self._doc.update(t['line_index'], formatted_line)
                     raw_line = formatted_line
 
+                date: Optional[datetime]
+                error: str
                 date, error = document.extract_reminder_date(document.get_line_title(raw_line), today)
+
+                # handling possible shell execution as reminder
+                if len(error) > 0 and document.has_retcode_or_shell_output_link(raw_line):
+                    error = ''
+                    if document.has_retcode_link(raw_line):
+                        date = self._datetime_provider()
+                    else:
+                        date = self._datetime_provider() + timedelta(days=1)
 
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
-
                 if date and (not active_only or date <= today):
                     results.append(t)
 

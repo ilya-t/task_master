@@ -639,3 +639,21 @@ def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Op
         return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
     date_obj = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
     return date_obj, ""
+
+
+def has_retcode_link(line: str) -> bool:
+    for l in get_links(line):
+        if 'retcode=' in l['link']:
+            return True
+    return False
+
+
+def has_shell_output_link(line: str) -> bool:
+    for l in get_links(line):
+        if l['title'].startswith('`') and l['title'].endswith('`'):
+            return True
+    return False
+
+
+def has_retcode_or_shell_output_link(line: str) -> bool:
+    return has_retcode_link(line) or has_shell_output_link(line)
