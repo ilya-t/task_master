@@ -378,7 +378,7 @@ class TaskMaster:
                 if len(error) > 0 and document.has_retcode_or_shell_output_link(raw_line):
                     error = ''
                     if document.has_retcode_link(raw_line):
-                        date = self._datetime_provider()
+                        date = self._datetime_provider() - timedelta(minutes=1)
                     else:
                         date = self._datetime_provider() + timedelta(days=1)
 
