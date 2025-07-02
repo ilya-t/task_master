@@ -169,22 +169,37 @@ class TaskMaster:
             return True
 
         def try_insert_checkboxes(dst: [], groups: []) -> None:
+            used_positions = set()
             for group in sort_by_end(groups):
                 start: int = group['start']
                 end: int = group['end']
+                pos = end + 1
+                if pos in used_positions:
+                    continue
                 if can_add_trailing_checkbox(start, end):
                     line = self._doc.line(start)
                     padding = get_padding(line)
+                    if start == end:
+                        next_indent = None
+                        if pos < len(self._doc.lines()):
+                            next_indent = len(get_padding(self._doc.lines()[pos]))
+                        if next_indent is not None and next_indent > len(padding):
+                            padding = ' ' * next_indent
+                        else:
+                            padding = padding + '    '
                     dst.append(
                         {
-                            'end': end + 1,
+                            'end': pos,
                             'line': padding + '- [ ] '
                         }
                     )
+                    used_positions.add(pos)
 
-        check_groups = self._doc.get_check_groups_at_range(
-            start=0,
-            end=len(self._doc.lines()) - 1,
+        check_groups = document._distinct_ranges_list(
+            self._doc.get_check_groups_at_range(
+                start=0,
+                end=len(self._doc.lines()) - 1,
+            )
         )
         insertions = []
         try_insert_checkboxes(insertions, check_groups)
