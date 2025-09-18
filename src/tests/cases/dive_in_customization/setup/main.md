@@ -3,12 +3,8 @@ There is no space for dive-in!
 
 # [ ] dive-in expected
 
-I left space for dive-in
-- bullet #1
-
-# [ ] dive-in already exists -> sub-dive
-
-expecting dive-in too.
+- [ ] I left space for dive-in
+- [ ] bullet #1
 
 # [ ] dive-in already exists
 dive-in:

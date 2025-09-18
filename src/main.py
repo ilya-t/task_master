@@ -23,8 +23,6 @@ python_script_path = os.path.dirname(__file__)
 execution_location_path = os.path.abspath('')
 
 LOG_FILE = python_script_path + '/operations.log'
-DIVE_TEMPLATE_INTRO = 'dive-in:'
-DIVE_TEMPLATE_SCRIPT_BODY = 'git checkout branch_name'
 HISTORY_DIR = '/tmp/task_master_memories'
 UNUSED_FILES_TOPIC = 'unused local files (complete to delete all)'
 UNUSED_FILES = f'# [ ] {UNUSED_FILES_TOPIC}'
@@ -34,6 +32,8 @@ REMINDERS_TOPIC = '>>> (Reminders) <<<'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 
+CONFIG_TYPOS = 'typos'
+CONFIG_DIVE_IN_TEMPLATE = 'dive-in_template'
 
 def get_config_files(config_file: str) -> str:
     name, _ = os.path.splitext(os.path.basename(config_file))
@@ -65,10 +65,10 @@ class TaskMaster:
                  ) -> None:
         super().__init__()
         self._datetime_provider = datetime_provider
-        self._config_file = taskflow_file
+        self._target_file = taskflow_file
         self._configs_file = configs_file
         self._history_file = history_file
-        self._doc = document.Document(self._config_file)
+        self._doc = document.Document(self._target_file)
         if memories_dir:
             self._memories_dir = memories_dir
         else:
@@ -85,6 +85,7 @@ class TaskMaster:
         else:
             self._clipboard = build_clipboard_companion()
         self._cached_execution_completions = {}
+        self._configs = None
 
     def _determine_shell(self) -> str:
         for candidate in ['/bin/zsh', '/bin/bash', '/bin/sh']:
@@ -102,20 +103,6 @@ class TaskMaster:
         self._doc.insert(0, '# [ ] ' + current_time)
 
     def _insert_setup_template_to_tasks(self):
-        def find_parent_dive_in_block(index: int) -> []:
-            topic = self._doc.get_topic_by_line(index)
-            if not topic:
-                return None
-
-            title = self._doc.lines()[topic['start']]
-            parent = document.split_title_to_address(document.get_line_title(title))[0]
-            parent_topic = self._doc.get_topic_by_title(parent)
-
-            if not parent_topic:
-                return None
-
-            return self._find_dive_in_block(parent_topic)
-
         for topic in sort_by_end(self._doc.get_topics()):
             if self._doc.lines()[topic['start']] == UNUSED_FILES:
                 continue
@@ -127,18 +114,7 @@ class TaskMaster:
                 continue
 
             self._doc.remove(start=i, end=i)
-            template = [
-                DIVE_TEMPLATE_INTRO,
-                '```sh',
-            ]
-
-            parent_dive_in = find_parent_dive_in_block(i)
-            if parent_dive_in:
-                template.extend(parent_dive_in)
-            else:
-                template.append(DIVE_TEMPLATE_SCRIPT_BODY)
-            template.append('```')
-
+            template: [str] = self._get_configs()[CONFIG_DIVE_IN_TEMPLATE]
             self._doc.insert_all(i, template)
         pass
 
@@ -463,7 +439,7 @@ class TaskMaster:
             if 'line_index' in r:
                 shifted_index = r['line_index'] + ongoing_topic_height
                 lines.append(
-                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._config_file)}#L{shifted_index})"
+                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._target_file)}#L{shifted_index})"
                 )
             else:
                 if 'indent' in r:
@@ -474,16 +450,7 @@ class TaskMaster:
         pass
 
     def _fix_typos(self):
-        if not self._configs_file:
-            return
-
-        if not os.path.exists(self._configs_file):
-            return
-
-        with open(self._configs_file, 'r') as file:
-            configs = json.load(file)
-
-        typos: {} = configs.get('typos', {})
+        typos: {} = self._get_configs()[CONFIG_TYPOS]
 
         if len(typos) == 0:
             return
@@ -516,7 +483,7 @@ class TaskMaster:
 
     def _make_defensive_copy(self):
         os.makedirs(self._memories_dir, exist_ok=True)
-        shutil.copy(self._config_file, self._memories_dir + '/' + os.path.basename(self._config_file))
+        shutil.copy(self._target_file, self._memories_dir + '/' + os.path.basename(self._target_file))
         pass
 
     def _move_completed_tasks(self):
@@ -771,8 +738,8 @@ class TaskMaster:
                     file_ext = suggested_file_ext
                 if is_picture_ref and generate_file and file_ext.lower() != '.png':
                     file_ext = '.png'
-                abs_link = increasing_index_file(get_config_files(self._config_file) + '/' + file_name + file_ext)
-                processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._config_file)))
+                abs_link = increasing_index_file(get_config_files(self._target_file) + '/' + file_name + file_ext)
+                processed_link = '.' + abs_link.removeprefix(os.path.dirname(get_config_files(self._target_file)))
 
                 if not is_picture_ref and title.startswith('`') and title.endswith('`'):
                     processed_link = self._process_shell_request(line_index, title, link)
@@ -876,7 +843,7 @@ class TaskMaster:
             return
 
         delete_all: bool = document.is_task(self._doc.line(topic['start']), status='x')
-        config_files = get_config_files(self._config_file)
+        config_files = get_config_files(self._target_file)
         for i in reversed(range(topic['start'], topic['end'] + 1)):
             line = self._doc.lines()[i]
             if not document.is_checkbox(line, 'x') and not delete_all:
@@ -893,7 +860,7 @@ class TaskMaster:
                 continue
 
             decoded_link = urllib.parse.unquote(link)
-            src = to_abs_path(self._config_file, decoded_link)
+            src = to_abs_path(self._target_file, decoded_link)
             is_local_config_file = os.path.basename(os.path.dirname(src)) == os.path.basename(config_files)
             if is_local_config_file and os.path.exists(src):
                 mem_dir = self._memories_dir + '/deleted_files'
@@ -908,7 +875,7 @@ class TaskMaster:
             self._doc.remove(topic['start'], topic['end'])
 
     def _gather_existing_files(self) -> [str]:
-        config_files = get_config_files(self._config_file)
+        config_files = get_config_files(self._target_file)
         dir = os.path.basename(config_files)
         for root, _, files in os.walk(config_files):
             return list(map(lambda f: './' + dir + '/' + f, files))
@@ -1048,7 +1015,7 @@ class TaskMaster:
     def _process_shell_request(self, line_index: int, title: str, link: str) -> str:
         # TODO: reduce complexity
         if len(link.strip()) == 0:
-            dst = increasing_index_file(get_config_files(self._config_file) + '/cmd.log')
+            dst = increasing_index_file(get_config_files(self._target_file) + '/cmd.log')
             document.write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             # TODO: now is a good time to open executions.log
@@ -1094,7 +1061,7 @@ class TaskMaster:
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
             executions = self._get_shell_executions()
-            link_abs_path: str = to_abs_path(self._config_file, link)
+            link_abs_path: str = to_abs_path(self._target_file, link)
             for e in reversed(executions):
                 if e['file'].endswith(link_abs_path):
                     status: str = e['status']
@@ -1118,7 +1085,7 @@ class TaskMaster:
     def _get_shell_executions(self) -> [{}]:
         if self._cached_executions:
             return self._cached_executions
-        abs_path = to_abs_path(self._config_file, self._executions_logfile)
+        abs_path = to_abs_path(self._target_file, self._executions_logfile)
         if not os.path.exists(abs_path):
             return []
 
@@ -1126,7 +1093,7 @@ class TaskMaster:
         return self._cached_executions
 
     def _remove_execution_results(self, link: str):
-        abs_path = to_abs_path(self._config_file, self._executions_logfile)
+        abs_path = to_abs_path(self._target_file, self._executions_logfile)
         if not os.path.exists(abs_path):
             return
 
@@ -1140,7 +1107,11 @@ class TaskMaster:
     def _find_dive_in_block(self, topic: {}) -> [str]:
         dive_line = topic['start'] + 1
         lines = self._doc.lines()
-        if not lines[dive_line].startswith(DIVE_TEMPLATE_INTRO):
+
+        dive_in_template_ = self._get_configs()['dive-in_template']
+        if len(dive_in_template_) == 0:
+            return []
+        if not lines[dive_line].startswith(dive_in_template_[0]):
             return []
         if not lines[dive_line + 1].startswith('```sh'):
             return []
@@ -1154,7 +1125,7 @@ class TaskMaster:
         return result
 
     def _resolve_custom_history_file(self, name: str) -> str:
-        doc_dir = os.path.dirname(self._config_file)
+        doc_dir = os.path.dirname(self._target_file)
         candidate = doc_dir + '/' + name
         if os.path.exists(candidate):
             return candidate
@@ -1184,7 +1155,7 @@ class TaskMaster:
             return outline
 
         task_lines = self._doc.get_topic_lines(task)
-        abs_files_dir = get_config_files(self._config_file)
+        abs_files_dir = get_config_files(self._target_file)
         files_dir = './' + os.path.basename(abs_files_dir)
         for i, line in enumerate(task_lines):
             line_links = document.get_links(line)
@@ -1305,7 +1276,7 @@ class TaskMaster:
             if 'line_index' in r:
                 shifted_index = r['line_index'] + ongoing_topic_height
                 lines.append(
-                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._config_file)}#L{shifted_index})"
+                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._target_file)}#L{shifted_index})"
                 )
             else:
                 lines.append(f"{r['indent']}- {r['title']}")
@@ -1313,6 +1284,28 @@ class TaskMaster:
         lines.insert(0, f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}')
         self._doc.insert_all(start, lines)
         pass
+
+    def _get_configs(self) -> {}:
+        if self._configs:
+            return self._configs
+
+        configs = {}
+        if self._configs_file and os.path.exists(self._configs_file):
+            with open(self._configs_file, 'r') as file:
+                configs = json.load(file)
+
+
+        if CONFIG_TYPOS not in configs:
+            configs[CONFIG_TYPOS] = {}
+        if CONFIG_DIVE_IN_TEMPLATE not in configs:
+            configs[CONFIG_DIVE_IN_TEMPLATE] = [
+                'dive-in:',
+                '```sh',
+                'git checkout branch_name',
+                '```'
+            ]
+        self._configs = configs
+        return configs
 
 
 def increasing_index_file(dst: str) -> str:
@@ -1351,7 +1344,7 @@ def parse_args():
     parser.add_argument('--archive', metavar='file', type=str,
                         help='Path to archive file that will be used by default when tasks are completed.')
     parser.add_argument('--config', metavar='file', type=str,
-                        help='Path to config file with extra features like typos and etc..')
+                        help='Path to config file with extra features like typos and etc. Config samples could be found in test cases.')
     parser.add_argument('--experimental-archived-links-processor', metavar='command_line', type=str,
                         help='specifies a links processor that will be triggered when tasks are archived')
     parser.add_argument('--reminders', action='store_true',

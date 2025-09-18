@@ -12,9 +12,9 @@ I left space for dive-in
 # [ ] dive-in already exists -> sub-dive
 dive-in:
 ```sh
-echo "hello world"
+git checkout branch_name
 ```
-expecting dive-in inheritance from parent.
+expecting dive-in too.
 
 # [ ] dive-in already exists
 dive-in:
