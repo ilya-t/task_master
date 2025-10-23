@@ -12,7 +12,7 @@ cd ..
 
 # exec script generation
 exec_script=./run
-echo "#!$(pwd)/src/venv/bin/python3" > $exec_script
+echo "#!$(pwd)/src/venv/bin/python3.11" > $exec_script
 echo "# FILE IS GENERATED!" >> $exec_script
 echo "import os" >> $exec_script
 echo "import sys" >> $exec_script

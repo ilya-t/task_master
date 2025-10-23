@@ -8,7 +8,7 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 from clipboard import ClipboardCompanion, build_clipboard_companion
 
@@ -61,7 +61,7 @@ class TaskMaster:
                  executions_logfile: str = None,
                  memories_dir: str = None,
                  configs_file: str = None,
-                 clipboard: ClipboardCompanion | None = None,
+                 clipboard: Union[ClipboardCompanion, None] = None,
                  ) -> None:
         super().__init__()
         self._datetime_provider = datetime_provider
