@@ -1,7 +1,7 @@
 import os
 import subprocess
-
 import document
+from typing import Union
 
 
 def get_shell_executions(executions_path: str) -> [{}]:
@@ -15,7 +15,7 @@ def get_shell_executions(executions_path: str) -> [{}]:
     return list(map(parse_line, document.read_lines(executions_path)))
 
 
-def capture_output(cmd: str, ignore_errors=False) -> str | None:
+def capture_output(cmd: str, ignore_errors=False) -> Union[str, None]:
     try:
         return subprocess.check_output(
             cmd, 
