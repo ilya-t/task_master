@@ -47,32 +47,49 @@ class Document:
 
     def insert(self, index: int, line: str):
         self._lines.insert(index, line)
+        self._mark_changed()
+
+    def _mark_changed(self):
         self._changed = True
 
     def insert_all(self, index: int, lines: [str]):
         for l in reversed(lines):
             self._lines.insert(index, l)
-        self._changed = True
+        self._mark_changed()
 
     def remove(self, start: int, end: int):
         new_lines = []
         new_lines.extend(self._lines[:start])
         new_lines.extend(self._lines[end + 1:])
         self._lines = new_lines
-        self._changed = True
+        self._mark_changed()
 
     def remove_line(self, index: int):
         self._lines.pop(index)
-        self._changed = True
+        self._mark_changed()
 
     def update(self, i, line):
         self._lines[i] = line
-        self._changed = True
+        self._mark_changed()
         pass
 
     def trim_trailing_empty_lines(self):
         if trim_trailing_empty_lines(self._lines):
-            self._changed = True
+            self._mark_changed()
+
+    def format_checkboxes_left_paddings(self):
+        groups = self.get_check_groups_at_range(start=0, end=len(self._lines) - 1)
+
+        for g in groups:
+            for _, li in enumerate(range(g['start'], g['end'])):
+                line = self.line(li)
+                tab_less = line.lstrip('\t')
+                tab_count = len(line) - len(tab_less)
+
+                if tab_count > 0:
+                    line = '    ' * tab_count + tab_less
+                    self.update(li, line)
+        pass
 
     def has_changed(self):
         return self._changed
@@ -222,7 +239,7 @@ class Document:
         if len(lines) == 0:
             return
         self._lines.extend(lines)
-        self._changed = True
+        self._mark_changed()
         pass
 
     def as_tasks_tree(self) -> []:
@@ -268,6 +285,7 @@ class Document:
         next_start = 0
         for topic in topics:
             if topic['start'] > next_start:
+                # these are check-groups at document's root
                 orphan_groups: [{}] = as_nested_dict(
                     self.get_check_groups_at_range(next_start, topic['start'] - 1)
                 )

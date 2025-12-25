@@ -469,6 +469,7 @@ class TaskMaster:
 
     def _execute(self):
         self._fix_typos()
+        self._doc.format_checkboxes_left_paddings()
         self._untitled_to_tasks()
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
