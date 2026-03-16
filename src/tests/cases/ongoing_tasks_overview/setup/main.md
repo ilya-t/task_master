@@ -35,3 +35,9 @@ pwd
 
 # another root
 - [-] Something is happening
+
+# [-] [[root b]] -> with implicit ongoing task
+- [x] task A
+    - [x] sub-task
+- [ ] first opened task is considered to be a 'focus point'
+- [ ] 

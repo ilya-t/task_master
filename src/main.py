@@ -271,6 +271,17 @@ class TaskMaster:
 
         return results
 
+    def _find_task_at(self, line_index: int, tasks: [{}]) -> {}:
+        for task in tasks:
+            if 'line_index' in task and task['line_index'] == line_index:
+                return task
+
+            candidate = self._find_task_at(line_index, task.get('children', []))
+
+            if candidate:
+                return candidate
+        return None
+
     def _prepare_ongoing_topic_lines(self, tasks: [], level: int = 0) -> [{}]:
         def find_single_ongoing_checkbox_line(task: {}) -> int:
             candidate = -1
@@ -295,6 +306,29 @@ class TaskMaster:
 
             return candidate
 
+        def find_first_open_checkbox(task: {}) -> int:
+            for c in task['children']:
+                li = c.get('line_index', -1)
+                if li == -1:
+                    continue
+                l = self._doc.line(li)
+
+                if document.is_checkbox(l, document.STATUS_OPEN):
+                    return li
+
+                if document.is_checkbox(l, document.STATUS_IN_PROGRESS):
+                    # we're looking for opened checkbox to determ
+                    # last 'progress point', if 'progress point' is
+                    # set manually, then there is no need in our help.
+                    return -1
+
+                inner_checkbox = find_first_open_checkbox(c)
+
+                if inner_checkbox >= 0:
+                    return inner_checkbox
+
+            return -1
+
         results = []
         for task in tasks:
             indent = "    " * level
@@ -302,8 +336,11 @@ class TaskMaster:
             if topic_title.startswith('[[') and topic_title.endswith(']]'):
                 topic_title = topic_title.removeprefix('[[').removesuffix(']]')
 
+            result = None
+
             if 'line_index' in task and document.is_task(self._doc.line(task['line_index'])):
                 ongoing_checkbox_index = find_single_ongoing_checkbox_line(task)
+
                 if ongoing_checkbox_index >= 0:
                     results.append(
                         {
@@ -314,22 +351,35 @@ class TaskMaster:
                     )
                     continue
 
-            if len(task['children']) == 0:
-                results.append(
-                    {
-                        'indent': indent,
-                        'title': topic_title,
-                        'line_index': task['line_index'],
-                    }
-                )
+                if document.is_task(self._doc.line(task['line_index']), status=document.STATUS_IN_PROGRESS):
+                    # finding first opened checkbox to move focus to it so we could return to task faster
+                    task_with_all_children = self._find_task_at(
+                        line_index = task['line_index'],
+                        tasks = self._doc.as_tasks_tree(),
+                    )
 
-            else:
-                results.append(
-                    {
-                        'indent': indent,
-                        'title': topic_title,
+                    if task_with_all_children:
+                        open_checkbox_index = find_first_open_checkbox(task_with_all_children)
+                        if open_checkbox_index >= 0:
+                            result = {
+                                'indent': indent,
+                                'title': topic_title,
+                                'line_index': open_checkbox_index,
+                            }
+
+            if not result:
+                if len(task['children']) == 0:
+                    result = {
+                            'indent': indent,
+                            'title': topic_title,
+                            'line_index': task['line_index'],
                     }
-                )
+                else:
+                    result = {
+                            'indent': indent,
+                            'title': topic_title,
+                    }
+            results.append(result)
             results.extend(self._prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
         return results
 

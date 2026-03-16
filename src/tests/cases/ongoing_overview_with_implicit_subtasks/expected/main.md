@@ -24,7 +24,7 @@ This subtask of `task` extracted from checkbox actually was not declared as subt
 - [ ] task#2 
 - [ ] 
 
-# [-] [[root]]
+# [ ] [[root]]
 - [ ] experiment check-list
     - [^] task
     - [ ] 

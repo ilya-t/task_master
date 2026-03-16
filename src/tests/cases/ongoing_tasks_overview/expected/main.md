@@ -3,10 +3,12 @@
 
 # >>> (Active) <<<
 - root
-    - [ongoing task at root](main.md#L40)
-    - [[ongoing task with link](https://link.com)](main.md#L29)
+    - [ongoing task at root](main.md#L42)
+    - [[ongoing task with link](https://link.com)](main.md#L31)
 - another root
-    - [Something is happening](main.md#L44)
+    - [Something is happening](main.md#L46)
+- root b
+    - [with implicit ongoing task](main.md#L52)
 
 # [ ] root -> no ongoing tasks
 Intoduction note.
@@ -42,4 +44,10 @@ pwd
 
 # another root
 - [-] Something is happening
+- [ ] 
+
+# [-] [[root b]] -> with implicit ongoing task
+- [x] task A
+    - [x] sub-task
+- [ ] first opened task is considered to be a 'focus point'
 - [ ] 
