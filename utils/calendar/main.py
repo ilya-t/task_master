@@ -5,6 +5,7 @@ import os.path
 import subprocess
 import sys
 import threading
+import functools
 from typing import List, Optional, Any, Union
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import datetime
@@ -178,21 +179,27 @@ def generate_reminders(task_master_dir: str, notes_dir: str) -> {}:
 
 def sync(task_master_dir: str, notes_dir: str, port: int):
     def update_reminders():
+        print('Updating your notes!')
+        capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
+        print('Generating reminders!')
+        reminders: {} = generate_reminders(task_master_dir, notes_dir)
+        generate_ics(reminders)
+
+    def update_reminders_loop():
         while True:
             time.sleep(3600) # 1h
-            print('Generating reminders!')
-            capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
-            reminders: {} = generate_reminders(task_master_dir, notes_dir)
-            generate_ics(reminders)
+            update_reminders()
 
     def serve():
         print(f'Serving local iCal server at: http://localhost:{port}/{ICS_FILENAME}')
-        server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
+        handler = functools.partial(SimpleHTTPRequestHandler, directory=PYTHON_SCRIPT_PATH) # TODO: serve single file
+        server = HTTPServer(('0.0.0.0', port), handler)
+        server.allow_reuse_address = True
         server.serve_forever()
 
     print('Initial reminders preparation')
     update_reminders()
-    thread = threading.Thread(target=update_reminders, daemon=True)
+    thread = threading.Thread(target=update_reminders_loop, daemon=True)
     thread.start()
     serve()
 
