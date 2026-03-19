@@ -179,17 +179,19 @@ def generate_reminders(task_master_dir: str, notes_dir: str) -> {}:
 def sync(task_master_dir: str, notes_dir: str, port: int):
     def update_reminders():
         while True:
+            time.sleep(3600) # 1h
             print('Generating reminders!')
             capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
             reminders: {} = generate_reminders(task_master_dir, notes_dir)
             generate_ics(reminders)
-            time.sleep(3600) # 1h
 
     def serve():
         print(f'Serving local iCal server at: http://localhost:{port}/{ICS_FILENAME}')
-        server = HTTPServer(('localhost', port), SimpleHTTPRequestHandler)
+        server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
         server.serve_forever()
 
+    print('Initial reminders preparation')
+    update_reminders()
     thread = threading.Thread(target=update_reminders, daemon=True)
     thread.start()
     serve()
