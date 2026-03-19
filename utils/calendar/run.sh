@@ -11,4 +11,4 @@ cd ../..
 TASK_MASTER_DIR=$(pwd)
 cd -
 
-python3 main.py $TASK_MASTER_DIR $YOUR_NOTES $PORT
+$TASK_MASTER_DIR/src/venv/bin/python3.11 main.py $TASK_MASTER_DIR $YOUR_NOTES $PORT
