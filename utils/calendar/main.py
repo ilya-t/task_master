@@ -179,6 +179,7 @@ def sync(task_master_dir: str, notes_dir: str, port: int):
     def update_reminders():
         while True:
             print('Generating reminders!')
+            capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
             reminders: {} = generate_reminders(task_master_dir, notes_dir)
             generate_ics(reminders)
             time.sleep(3600) # 1h
