@@ -7,7 +7,7 @@ import sys
 import threading
 from typing import List, Optional, Any, Union
 from http.server import HTTPServer, SimpleHTTPRequestHandler
-from datetime import datetime
+import datetime
 
 GENERATED_DESC = 'auto-generated event'
 DEFAULT_DURATION_MINUTES = 30
@@ -21,7 +21,7 @@ def to_reminders(reminders_file: str, reminders: []) -> {}:
     
     today_start = datetime.datetime(now.year, now.month, now.day)
     
-    local_time = datetime.now().astimezone()
+    local_time = datetime.datetime.now().astimezone()
     offset_minutes = int(local_time.utcoffset().total_seconds() / 60)
 
     end_of_day = int(datetime.datetime(now.year, now.month, now.day, 23, 59, 59).timestamp())
@@ -43,7 +43,7 @@ def to_reminders(reminders_file: str, reminders: []) -> {}:
             timestamp = outdated_timestamp
             title = f'[{original_date_str}] {title}'
 
-        uid = f'{filename}/{r['title']}/{str(timestamp)}'
+        uid = f'{filename}/{title}/{str(timestamp)}'
 
         results[uid] = {
             'title': prefix + title,
@@ -80,7 +80,8 @@ def update_reminders_at_google_calendar(app, reminders: {}):
 
     for key in reminders:
         r = reminders[key]
-        print(f'Adding event for: {r['title']}')
+        title = r['title']
+        print(f'Adding event for: {title}')
 
         app.add_event(
           title=r['title'],
