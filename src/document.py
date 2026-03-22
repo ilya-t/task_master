@@ -641,9 +641,9 @@ def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Op
         now = datetime.now()
     content = line.split(': ', 1)[0].strip()
 
-    date_with_time_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content)
+    date_with_time_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{1,2}:\d{2}\b', content)
     date_only_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\b', content)
-    time_only_match = re.match(r'\b\d{2}:\d{2}\b', content)
+    time_only_match = re.match(r'\b\d{1,2}:\d{2}\b', content)
 
     date_str = None
     if date_with_time_match:

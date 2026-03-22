@@ -6,3 +6,4 @@
 - [!] 2023.04.01 13:45: first of april 1:45PM at 2023
 - [-] ongoing task
 - [!] 2026.01.01: january first of 2026
+- [!] 2026.02.28 6:30: early bird may omit zeros at HH
