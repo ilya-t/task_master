@@ -1,2 +1,4 @@
 reminders.ics
 .DS_Store
+service.pid
+service.log

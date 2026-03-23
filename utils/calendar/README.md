@@ -3,5 +3,5 @@ Scans Markdown files for reminders, processes them as an .ics calendar file over
 
 # Quick start
 ```sh
-./run.sh /dir/to/your/notes
+./start.sh /dir/to/your/notes
 ```

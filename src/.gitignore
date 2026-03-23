@@ -3,3 +3,4 @@ executions.log
 .bashrc
 venv
 __pycache__
+.idea
