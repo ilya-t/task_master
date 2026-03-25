@@ -103,7 +103,7 @@ def generate_ics(reminders: dict):
 
     def format_dt(ts: int) -> str:
         dt = datetime.datetime.utcfromtimestamp(ts)
-        return dt.strftime("%Y%m%dT%H%M%S")
+        return dt.strftime("%Y%m%dT%H%M%S") + 'Z' # to mark that we're passing UTC
 
     lines = [
         "BEGIN:VCALENDAR",
@@ -119,7 +119,7 @@ def generate_ics(reminders: dict):
 
         dtstart = format_dt(start_ts)
         dtend = format_dt(end_ts)
-        dtstamp = start_ts
+        dtstamp = format_dt(start_ts)
 
         lines.extend([
             "BEGIN:VEVENT",
