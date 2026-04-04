@@ -9,6 +9,7 @@ import functools
 from typing import List, Optional, Any, Union
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import datetime
+import argparse
 
 GENERATED_DESC = 'auto-generated event'
 DEFAULT_DURATION_MINUTES = 30
@@ -156,11 +157,17 @@ def capture_output(cmd: str, ignore_errors=False) -> Union[str, None]:
         raise e
 
 
-def generate_reminders(task_master_dir: str, notes_dir: str) -> {}:
+def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: list) -> {}:
     results = {}
     for root, dir, files in os.walk(notes_dir):
         for f in files:
-            full_path = f'{root}/{f}'
+            full_path = os.path.join(root, f)
+            rel_path = os.path.relpath(full_path, notes_dir)
+
+            if any(pattern in rel_path for pattern in ignore_paths_like):
+                print(f"Skipped (ignored): {rel_path}")
+                continue
+
             if (f.endswith('.md')):
                 # print(f'Processing: {full_path}')
                 reminders_json: str = capture_output(task_master_dir + f'/run \'{full_path}\' --reminders')
@@ -171,12 +178,12 @@ def generate_reminders(task_master_dir: str, notes_dir: str) -> {}:
     return results
 
 
-def sync(task_master_dir: str, notes_dir: str, port: int):
+def sync(task_master_dir: str, notes_dir: str, port: int, ignore_paths_like: list):
     def update_reminders():
         print('Updating your notes!')
         capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
         print('Generating reminders!')
-        reminders: {} = generate_reminders(task_master_dir, notes_dir)
+        reminders: {} = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
         generate_ics(reminders)
 
     def update_reminders_loop():
@@ -199,10 +206,28 @@ def sync(task_master_dir: str, notes_dir: str, port: int):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Sync reminders and serve ICS")
+    parser.add_argument("task_master_dir")
+    parser.add_argument("port", type=int)
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to JSON config file containing notes_dir and ignore_paths_like"
+    )
+
+    args = parser.parse_args()
+
+    with open(args.config, "r") as f:
+        config = json.load(f)
+
+    notes_dir = config["notes_dir"]
+    ignore_paths_like = config.get("ignore_paths_like", [])
+
     sync(
-        task_master_dir = sys.argv[1],
-        notes_dir = sys.argv[2],
-        port = int(sys.argv[3]),
+        task_master_dir=args.task_master_dir,
+        notes_dir=notes_dir,
+        port=args.port,
+        ignore_paths_like=ignore_paths_like,
     )
 
 
