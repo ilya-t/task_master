@@ -434,11 +434,15 @@ class TaskMaster:
             title = r['title']
             date, _ = document.extract_reminder_date(title, now)
             timestamp = int(date.timestamp())
+            date_str = None
             if ': ' in title:
-                title = title.split(': ', 1)[1]
+                date_and_title = title.split(': ', 1)
+                title = date_and_title[1]
+                date_str = date_and_title[0]
             entry = {
                 'title': title,
                 'line': r['line_index'] + 1,
+                'exact_time': ':' in date_str,
             }
             if timestamp:
                 entry['timestamp'] = str(timestamp)
