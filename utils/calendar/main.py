@@ -17,7 +17,8 @@ PYTHON_SCRIPT_PATH = os.path.dirname(__file__)
 ICS_FILENAME="reminders.ics"
 
 
-def to_reminders(reminders_file: str, reminders: []) -> {}:
+def task_master_reminders_to_internal_model(reminders_file: str, reminders_json: {}) -> {}:
+    reminders = reminders_json['reminders']
     now = datetime.datetime.now()
     filename = os.path.splitext(os.path.basename(reminders_file))[0]
     
@@ -55,6 +56,19 @@ def to_reminders(reminders_file: str, reminders: []) -> {}:
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
             'add_notification': not is_outdated,
         }
+
+    if 'errors' in reminders_json:
+        errors = map(lambda it: it['title'], reminders_json['errors'])
+        uid = f'{filename}/_errors_/{str(end_of_day_timestamp)}'
+        error_desc = '\n - '.join(errors)
+        results[uid] = {
+            'title': prefix + 'ERRORS!',
+            'summary':  f'{GENERATED_DESC}\nuid: {uid}\nError Lines:\n - {error_desc}', 
+            'timestamp': timestamp, 
+            'duration_minutes': DEFAULT_DURATION_MINUTES, 
+            'add_notification': not is_outdated,
+        }
+
     return results
 
 
@@ -174,7 +188,7 @@ def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: 
             if (f.endswith('.md')):
                 # print(f'Processing: {full_path}')
                 reminders_json: str = capture_output(task_master_dir + f'/run \'{full_path}\' --reminders')
-                reminders = to_reminders(reminders_file = f, reminders = json.loads(reminders_json))
+                reminders = task_master_reminders_to_internal_model(reminders_file = f, reminders_json = json.loads(reminders_json))
                 results.update(reminders)
             # else:
                 # print(f'Skipped: {full_path}')

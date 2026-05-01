@@ -7,3 +7,4 @@
 - [-] ongoing task
 - [!] 2026.01.01: january first of 2026
 - [!] 2026.02.28 6:30: early bird may omit zeros at HH
+- [!] 2026.03.03 invalid reminder

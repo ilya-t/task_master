@@ -5,10 +5,11 @@ import re
 import shutil
 import subprocess
 import time
+import typing
 import urllib.parse
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Tuple, Union
 
 from clipboard import ClipboardCompanion, build_clipboard_companion
 
@@ -383,8 +384,12 @@ class TaskMaster:
             results.extend(self._prepare_ongoing_topic_lines(tasks=task['children'], level=level + 1))
         return results
 
-    def _process_and_extract_reminders(self, tasks_tree: [], active_only: bool) -> []:
+    def _process_and_extract_reminders(self, tasks_tree: [], active_only: bool) -> Tuple[typing.List, typing.List]:
+        """
+        returns to lists: results and errors
+        """
         results = []
+        errors = []
         today = self._datetime_provider()
 
         for t in tasks_tree:
@@ -410,29 +415,45 @@ class TaskMaster:
 
                 if len(error) > 0:
                     self._doc.update(t['line_index'], self._doc.line(t['line_index']) + f' **({error})**')
+                    errors.append({
+                        'title': t['title'],
+                        'line': t['line_index'] + 1,
+                        'error': error,
+                    })
                 if date and (not active_only or date <= today):
                     results.append(t)
 
-            results.extend(self._process_and_extract_reminders(t['children'], active_only))
+            r, e = self._process_and_extract_reminders(t['children'], active_only)
+            results.extend(r)
+            errors.extend(e)
 
-        return results
+        return results, errors
 
     def _sort_reminders(self, reminders: []) -> []:
         now = self._datetime_provider()
         reminders.sort(key=lambda r: document.extract_reminder_date(r['title'], now)[0] or datetime.max)
         return reminders
 
-    def get_reminders(self, active_only: bool = True) -> [dict]:
+    def get_reminders(self, active_only: bool = True) -> dict:
         """Return reminders filtered by due date if ``active_only`` is True."""
         all_reminders = document.filter_tasks_tree(
             self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
-        reminders = self._sort_reminders(
-            self._process_and_extract_reminders(all_reminders, active_only))
-        result = []
+        unsorted_reminders, errors = self._process_and_extract_reminders(all_reminders, active_only)
+        reminders = self._sort_reminders(unsorted_reminders)
+        results = []
         now = self._datetime_provider()
         for r in reminders:
             title = r['title']
-            date, _ = document.extract_reminder_date(title, now)
+            date, error = document.extract_reminder_date(title, now)
+
+            if len(error) > 0:
+                errors.append({
+                    'title': title,
+                    'line': r['line_index'] + 1,
+                    'error': error,
+                })
+                continue
+
             timestamp = int(date.timestamp())
             date_str = None
             if ': ' in title:
@@ -442,11 +463,19 @@ class TaskMaster:
             entry = {
                 'title': title,
                 'line': r['line_index'] + 1,
-                'exact_time': ':' in date_str,
+                'exact_time': date_str and ':' in date_str,
             }
             if timestamp:
                 entry['timestamp'] = str(timestamp)
-            result.append(entry)
+            results.append(entry)
+
+        result = {
+            'reminders': results,
+        }
+
+        if len(errors) > 0:
+            result['errors'] = errors
+
         return result
 
 
@@ -463,8 +492,8 @@ class TaskMaster:
 
         ongoing_tasks = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_IN_PROGRESS)
         all_reminders = document.filter_tasks_tree(self._doc.as_tasks_tree(), status=document.STATUS_URGENT)
-        active_reminders = self._sort_reminders(
-            self._process_and_extract_reminders(all_reminders, True))
+        reminders, _ = self._process_and_extract_reminders(all_reminders, True)
+        active_reminders = self._sort_reminders(reminders)
 
         if len(ongoing_tasks) == 0 and len(active_reminders) == 0:
             # Not so much is going on!
