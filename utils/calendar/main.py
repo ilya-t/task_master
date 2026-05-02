@@ -26,6 +26,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
     
     local_time = datetime.datetime.now().astimezone()
 
+    start_of_day = int(today_start.timestamp())
     end_of_day = int(datetime.datetime(now.year, now.month, now.day, 23, 59, 59).timestamp())
     # shifting time by default duration would place event right to end of day and not pass to second day
     end_of_day_timestamp = end_of_day - (DEFAULT_DURATION_MINUTES * 60)
@@ -44,7 +45,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
             timestamp = end_of_day_timestamp
             title = f'[{original_date_str}] {title}'
 
-        if not r['exact_time']:
+        if not r['exact_time'] and (start_of_day <= timestamp <= end_of_day):
             timestamp = end_of_day_timestamp
 
         uid = f'{filename}/{title}/{str(timestamp)}'
