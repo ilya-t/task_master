@@ -10,12 +10,19 @@ from typing import List, Optional, Any, Union
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import datetime
 import argparse
+import re
 
 GENERATED_DESC = 'auto-generated event'
 DEFAULT_DURATION_MINUTES = 30
 PYTHON_SCRIPT_PATH = os.path.dirname(__file__)
 ICS_FILENAME="reminders.ics"
 
+
+def prettify_title(raw: str) -> str:
+    # Matches [title](url) and replaces it with the captured 'title'
+    processed = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', raw)
+    processed = processed.replace('`', '')
+    return processed
 
 def task_master_reminders_to_internal_model(reminders_file: str, reminders_json: {}) -> {}:
     reminders = reminders_json['reminders']
@@ -31,11 +38,11 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
     # shifting time by default duration would place event right to end of day and not pass to second day
     end_of_day_timestamp = end_of_day - (DEFAULT_DURATION_MINUTES * 60)
 
-    prefix = f'{filename}: '
+    prefix = ''
 
     results = {}
     for r in reminders:
-        title = r['title']
+        title = prettify_title(r['title'])
         timestamp = int(r['timestamp'])
         event_time = datetime.datetime.fromtimestamp(timestamp)
         is_outdated = event_time < today_start
@@ -49,10 +56,11 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
             timestamp = end_of_day_timestamp
 
         uid = f'{filename}/{title}/{str(timestamp)}'
+        actual_summary = '' if title == r['title'] else r['title']
 
         results[uid] = {
             'title': prefix + title,
-            'summary':  f'{GENERATED_DESC}\nuid: {uid}', 
+            'summary':  f'{actual_summary}\n\n=====================\n{GENERATED_DESC}\nTech Data\nuid: {uid}\nfilename: {filename}', 
             'timestamp': timestamp, 
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
             'add_notification': not is_outdated,
@@ -65,7 +73,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
         results[uid] = {
             'title': prefix + 'ERRORS!',
             'summary':  f'{GENERATED_DESC}\nuid: {uid}\nError Lines:\n - {error_desc}', 
-            'timestamp': timestamp, 
+            'timestamp': end_of_day_timestamp, 
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
             'add_notification': not is_outdated,
         }
