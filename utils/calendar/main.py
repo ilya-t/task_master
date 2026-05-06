@@ -72,7 +72,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
         error_desc = '\n - '.join(errors)
         results[uid] = {
             'title': prefix + 'ERRORS!',
-            'summary':  f'{GENERATED_DESC}\nuid: {uid}\nError Lines:\n - {error_desc}', 
+            'summary':  f'Error Lines:\n - {error_desc}\n\n=====================\n{GENERATED_DESC}\nuid: {uid}\nfilename: {filename}', 
             'timestamp': end_of_day_timestamp, 
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
             'add_notification': not is_outdated,
@@ -85,7 +85,7 @@ def update_reminders_at_google_calendar(app, reminders: {}):
     up_to_date_reminders = set()
     def maybe_delete(event) -> bool:
         desc = event.get('description')
-        if not desc or not desc.startswith(GENERATED_DESC):
+        if not desc or not GENERATED_DESC in desc:
             return False
 
         for uid in reminders:
@@ -115,6 +115,29 @@ def update_reminders_at_google_calendar(app, reminders: {}):
           duration_minutes=r['duration_minutes'],
           add_notification=r['add_notification'],
         )
+
+
+def format_ics_text(text):
+    """
+    Escapes special characters and applies line folding for iCalendar TEXT values.
+    """
+    # 1. Escape special characters (\ must be first)
+    escaped = (text.replace('\\', '\\\\')
+                   .replace(';', '\\;')
+                   .replace(',', '\\,')
+                   .replace('\n', '\\n'))
+
+    # 2. Line Folding (limit to 75 octets)
+    # RFC 5545 requires lines to be folded with CRLF + Space (or Tab)
+    line_limit = 75
+    folded = []
+    
+    while len(escaped) > line_limit:
+        folded.append(escaped[:line_limit])
+        escaped = escaped[line_limit:]
+    folded.append(escaped)
+    
+    return '\r\n '.join(folded)
 
 
 def generate_ics(reminders: dict):
@@ -155,7 +178,7 @@ def generate_ics(reminders: dict):
             f"DTSTART:{dtstart}",
             f"DTEND:{dtend}",
             f"SUMMARY:{r['title']}",
-            f"DESCRIPTION:{r['summary']}",
+            f"DESCRIPTION:{format_ics_text(r['summary'])}",
             "END:VEVENT"
         ])
 
