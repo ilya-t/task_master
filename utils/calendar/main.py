@@ -38,8 +38,6 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
     # shifting time by default duration would place event right to end of day and not pass to second day
     end_of_day_timestamp = end_of_day - (DEFAULT_DURATION_MINUTES * 60)
 
-    prefix = ''
-
     results = {}
     for r in reminders:
         title = prettify_title(r['title'])
@@ -59,7 +57,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
         actual_summary = '' if title == r['title'] else r['title']
 
         results[uid] = {
-            'title': prefix + title,
+            'title': title,
             'summary':  f'{actual_summary}\n\n=====================\n{GENERATED_DESC}\nTech Data\nuid: {uid}\nfilename: {filename}', 
             'timestamp': timestamp, 
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
@@ -71,7 +69,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
         uid = f'{filename}/_errors_/{str(end_of_day_timestamp)}'
         error_desc = '\n - '.join(errors)
         results[uid] = {
-            'title': prefix + 'ERRORS!',
+            'title': f'{filename}: ERRORS!',
             'summary':  f'Error Lines:\n - {error_desc}\n\n=====================\n{GENERATED_DESC}\nuid: {uid}\nfilename: {filename}', 
             'timestamp': end_of_day_timestamp, 
             'duration_minutes': DEFAULT_DURATION_MINUTES, 
@@ -131,14 +129,21 @@ def format_ics_text(text):
     # RFC 5545 requires lines to be folded with CRLF + Space (or Tab)
     line_limit = 75
     folded = []
-    
-    while len(escaped) > line_limit:
-        folded.append(escaped[:line_limit])
-        escaped = escaped[line_limit:]
-    folded.append(escaped)
-    
-    return '\r\n '.join(folded)
+    current = ""
 
+    for ch in escaped:
+        candidate = current + ch
+
+        if len(candidate.encode('utf-8')) > line_limit:
+            folded.append(current)
+            current = ch
+        else:
+            current = candidate
+
+    folded.append(current)
+
+    # Fold using CRLF + SPACE
+    return '\r\n '.join(folded)
 
 def generate_ics(reminders: dict):
     """
