@@ -1,4 +1,8 @@
-# [ ] brilliant idea -> task #1
+# >>> (Active) <<<
+- brilliant idea
+    - [task #1](main.md#L5)
+
+# [-] brilliant idea -> task #1
 some thoughts about bullet #1
 blah-blah
 

@@ -102,7 +102,7 @@ class TaskMaster:
         datetime_obj = self._datetime_provider()
         current_time = datetime_obj.strftime('%Y.%m.%d ')
 
-        self._doc.insert(0, '# [ ] ' + current_time)
+        self._doc.insert(0, '# [-] ' + current_time)
 
     def _insert_setup_template_to_tasks(self):
         for topic in sort_by_end(self._doc.get_topics()):
@@ -199,7 +199,7 @@ class TaskMaster:
             new_task_lines: [str] = insertion['lines']
             task = document.get_line_title(insertion['task_line'])
             subtask = document.get_line_title(insertion['subtask_line'])
-            new_task_lines.insert(0, '# [ ] ' + task + ' -> ' + subtask)
+            new_task_lines.insert(0, '# [-] ' + task + ' -> ' + subtask)
             if new_task_lines[-1].strip() != '':
                 new_task_lines.append('')
             self._doc.insert_all(index=task_start, lines=new_task_lines)
@@ -1037,7 +1037,7 @@ class TaskMaster:
 
             if extract_start and extract_end:
                 insertion_lines = [
-                    '# [ ] ' + document.get_line_title(
+                    '# [-] ' + document.get_line_title(
                         self._doc.lines()[t['start']]) + ' -> ' + document.get_line_title(
                         self._doc.lines()[extract_start - 1]),
                 ]

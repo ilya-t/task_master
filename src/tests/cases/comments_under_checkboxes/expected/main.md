@@ -1,4 +1,13 @@
-# [ ] brilliant idea -> task #1
+# >>> (Active) <<<
+- brilliant idea
+    - [task #1](main.md#L10)
+- brilliant idea #2
+    - [task #2](main.md#L23)
+- brilliant idea #4
+    - [subtask 2.2](main.md#L38)
+    - [subtask 2.1](main.md#L41)
+
+# [-] brilliant idea -> task #1
 some thoughts about bullet #1
 blah-blah
 
@@ -11,7 +20,7 @@ git checkout brilliant
 - [ ] task #2
 - [ ] 
 
-# [ ] brilliant idea #2 -> task #2
+# [-] brilliant idea #2 -> task #2
 some thoughts about bullet #2
 blah-blah
 
@@ -27,10 +36,10 @@ blah-blah
 some thoughts about idea itself that are
 not yet related to any task
 
-# [ ] brilliant idea #4 -> subtask 2.2
+# [-] brilliant idea #4 -> subtask 2.2
 Subtask 2.2 notes that should be moved outside
 
-# [ ] brilliant idea #4 -> subtask 2.1
+# [-] brilliant idea #4 -> subtask 2.1
 Subtask 2.1 notes that should be moved outside
 
 # [ ] brilliant idea #4
