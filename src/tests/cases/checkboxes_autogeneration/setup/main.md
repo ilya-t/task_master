@@ -43,3 +43,11 @@ this is not a part of `first task`
     - [ ] uncompleted
         - [ ] uncompleted subtask
         - [ ] uncompleted subtask#2
+
+# sub-tasks generation
+- [ ] root task
+  
+- [ ] root task with sub-task
+    - [ ] sub task #1
+
+    - [ ] sub task #2

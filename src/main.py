@@ -14,6 +14,7 @@ from typing import Callable, Optional, Tuple, Union
 from clipboard import ClipboardCompanion, build_clipboard_companion
 
 import document
+import checkboxing
 import shell
 from document import get_padding
 from document import is_checkbox
@@ -118,55 +119,6 @@ class TaskMaster:
             template: [str] = self._get_configs()[CONFIG_DIVE_IN_TEMPLATE]
             self._doc.insert_all(i, template)
         pass
-
-    def _inject_extra_checkboxes(self):
-        def can_add_trailing_checkbox(start: int, end: int) -> bool:
-            start_line = self._doc.lines()[start]
-            group_padding = start_line[:start_line.index('- [')]
-            all_completed = True
-            if len(group_padding) > 0 and start > 0:
-                nested_group_parent_completed = self._doc.lines()[start - 1].strip().startswith('- [x]')
-                if not nested_group_parent_completed:
-                    all_completed = False
-
-            for gl in self._doc.lines()[start:end + 1]:
-                if not document.is_checkbox(gl, status='x'):
-                    all_completed = False
-
-            if all_completed:
-                return False
-
-            already_has_trailing_checkbox = self._doc.lines()[end].rstrip() == group_padding + '- [ ]'
-            if already_has_trailing_checkbox:
-                return False
-
-            if document.get_line_title(self._doc.line(start - 1)) == UNUSED_FILES_TOPIC:
-                return False
-
-            return True
-
-        def try_insert_checkboxes(dst: [], groups: []) -> None:
-            for group in sort_by_end(groups):
-                start: int = group['start']
-                end: int = group['end']
-                if can_add_trailing_checkbox(start, end):
-                    line = self._doc.line(start)
-                    padding = get_padding(line)
-                    dst.append(
-                        {
-                            'end': end + 1,
-                            'line': padding + '- [ ] '
-                        }
-                    )
-
-        check_groups = self._doc.get_check_groups_at_range(
-            start=0,
-            end=len(self._doc.lines()) - 1,
-        )
-        insertions = []
-        try_insert_checkboxes(insertions, check_groups)
-        for insertion in sort_by_end(insertions):
-            self._doc.insert(insertion['end'], insertion['line'])
 
     def _move_checkboxes_comments_into_tasks(self):
         def fix_space_groups_bounds(sg: []) -> []:
@@ -557,7 +509,8 @@ class TaskMaster:
         self._insert_setup_template_to_tasks()
         self._move_checkboxes_comments_into_tasks()
         self._move_checkboxes_subtasks_into_tasks()
-        self._inject_extra_checkboxes()
+        checkboxing.maybe_insert_subtask_checkboxes(self._doc)
+        checkboxing.inject_extra_checkboxes(self._doc, UNUSED_FILES_TOPIC)
         self._move_completed_tasks()
         self._update_checkboxes_status()
         self._generate_new_links()
@@ -1316,7 +1269,7 @@ class TaskMaster:
 
         trailing_checkbox_lines: [int] = find_trailing_checkboxes(
             check_groups=self._doc.get_check_groups(task))
-        lines_to_remove = sorted(trailing_checkbox_lines, reverse=True)
+        lines_to_remove = sorted(set(trailing_checkbox_lines), reverse=True)
         for i in lines_to_remove:
             self._doc.remove_line(i)
         return len(lines_to_remove)

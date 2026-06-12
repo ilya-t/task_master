@@ -53,3 +53,13 @@ this is not a part of `first task`
         - [ ] 
     - [ ] 
 - [ ] 
+
+# sub-tasks generation
+- [ ] root task
+    - [ ] 
+- [ ] root task with sub-task
+    - [ ] sub task #1
+        - [ ] 
+    - [ ] sub task #2
+    - [ ] 
+- [ ] 
