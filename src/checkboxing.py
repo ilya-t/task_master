@@ -1,5 +1,49 @@
+STATUS_IN_PROGRESS = '-'
+STATUS_URGENT = '!'
+STATUS_OPEN = ' '
+
+# Hyphen-minus and en-dash are both treated as checkbox bullets.
+CHECKBOX_BULLETS = ('-', '\u2013')
+
+
+def _checkbox_marker_index(line: str) -> int:
+    stripped = line.lstrip()
+    if len(stripped) < 5:
+        return -1
+
+    if stripped[0] not in CHECKBOX_BULLETS or stripped[2] != '[' or stripped[4] != ']':
+        return -1
+
+    return len(line) - len(stripped)
+
+
+def get_padding(line: str) -> str:
+    if len(line) == 0:
+        return ''
+
+    index = _checkbox_marker_index(line)
+    if index < 0:
+        return ''
+    return line[:index]
+
+
+def is_checkbox(line: str, status: str = None) -> bool:
+    marker_index = _checkbox_marker_index(line)
+    if marker_index < 0:
+        return False
+
+    rest = line[marker_index:]
+    if len(rest) < 5 or rest[0] not in CHECKBOX_BULLETS or rest[2] != '[' or rest[4] != ']':
+        return False
+
+    if status:
+        return rest[3] == status
+
+    return True
+
+
 import document
-from document import Document, get_padding, sort_by_end
+from document import Document, sort_by_end
 
 
 def index_after_blank_run(lines: [str], start: int) -> int:
@@ -11,12 +55,12 @@ def index_after_blank_run(lines: [str], start: int) -> int:
 
 def should_convert_subtask_placeholder(lines: [str], index: int) -> bool:
     line = lines[index]
-    if document.is_checkbox(line) or line.startswith('#'):
+    if is_checkbox(line) or line.startswith('#'):
         # Already structured content.
         return False
 
     prev = lines[index - 1]
-    if not document.is_checkbox(prev):
+    if not is_checkbox(prev):
         # Placeholders must sit right under a checkbox.
         return False
 
@@ -31,7 +75,7 @@ def should_convert_subtask_placeholder(lines: [str], index: int) -> bool:
         return False
 
     next_line = lines[next_index]
-    if not document.is_checkbox(next_line):
+    if not is_checkbox(next_line):
         # Only fill gaps between checkboxes.
         return False
 
@@ -66,7 +110,7 @@ def maybe_insert_subtask_checkboxes(doc: Document) -> None:
 def can_add_trailing_checkbox(doc: Document, start: int, end: int, unused_files_topic: str) -> bool:
     lines = doc.lines()
     start_line = lines[start]
-    group_padding = start_line[:start_line.index('- [')]
+    group_padding = get_padding(start_line)
     all_completed = True
     if len(group_padding) > 0 and start > 0:
         # Nested groups need a completed parent before trailing slots make sense.
@@ -75,7 +119,7 @@ def can_add_trailing_checkbox(doc: Document, start: int, end: int, unused_files_
             all_completed = False
 
     for gl in lines[start:end + 1]:
-        if not document.is_checkbox(gl, status='x'):
+        if not is_checkbox(gl, status='x'):
             # Any open checkbox means the group still needs a slot.
             all_completed = False
 
@@ -89,7 +133,7 @@ def can_add_trailing_checkbox(doc: Document, start: int, end: int, unused_files_
 
     end_line = lines[end]
     if (get_padding(end_line) == group_padding
-            and document.is_checkbox(end_line, status=' ')
+            and is_checkbox(end_line, status=' ')
             and len(document.get_line_title(end_line).strip()) == 0):
         # Placeholder normalization already added the trailing slot at this level.
         return False

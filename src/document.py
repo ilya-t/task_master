@@ -1,35 +1,8 @@
+import checkboxing
 import os
 import re
 from datetime import datetime, timedelta
 from typing import Union, Tuple, Optional
-
-STATUS_IN_PROGRESS = '-'
-STATUS_URGENT = '!'
-STATUS_OPEN = ' '
-
-
-def get_padding(line: str) -> str:
-    if len(line) == 0:
-        return ''
-
-    index = line.find('- [')
-    if index < 0:
-        return ''
-    else:
-        return line[:index]
-
-
-def is_checkbox(line: str, status: str = None) -> bool:
-    sl = line.lstrip()
-    checkbox: bool = len(sl) >= 4 and sl.startswith('- [') and sl[4] == ']'
-
-    if not checkbox:
-        return False
-
-    if status:
-        return line[len(get_padding(line)) + 3] == status
-
-    return True
 
 
 class Document:
@@ -109,12 +82,12 @@ class Document:
 
         levels = []
         for i, line in enumerate(self._lines[start:end + 1]):
-            if not is_checkbox(line):
+            if not checkboxing.is_checkbox(line):
                 continue
             li = start + i
             levels.append({
                 'index': li,
-                'level': len(get_padding(line)),
+                'level': len(checkboxing.get_padding(line)),
             })
 
         check_groups = []
@@ -253,20 +226,20 @@ class Document:
             if ci >= 0:
                 return line[ci]
             else:
-                return STATUS_OPEN
+                return checkboxing.STATUS_OPEN
 
         def to_tasks(check_group: {}) -> [{}]:
             results = []
             start_ = check_group['start']
             end_ = check_group['end']
-            root_padding = get_padding(self._lines[start_])
+            root_padding = checkboxing.get_padding(self._lines[start_])
             for i, l in enumerate(self._lines[start_: end_ + 1]):
                 li = start_ + i
                 subtasks = []
                 for c in check_group['children']:
                     if c['start'] == li + 1:
                         subtasks = to_tasks(c)
-                if get_padding(l) == root_padding:
+                if checkboxing.get_padding(l) == root_padding:
                     results.append({
                         'title': get_line_title(l),
                         'line_index': li,
@@ -371,7 +344,7 @@ class Document:
         for title in reversed(addr):
             new = {
                 'title': title,
-                'status': STATUS_OPEN,
+                'status': checkboxing.STATUS_OPEN,
                 'children': [],
             }
 
@@ -431,10 +404,10 @@ def read_lines(src) -> [str]:
 
 
 def checkbox_status_index(line) -> int:
-    if not is_checkbox(line):
+    if not checkboxing.is_checkbox(line):
         return -1
 
-    return len(get_padding(line)) + 3
+    return len(checkboxing.get_padding(line)) + 3
 
 
 def is_task(line: str, status: str = None) -> bool:
@@ -454,7 +427,7 @@ def is_task(line: str, status: str = None) -> bool:
 
 
 def get_line_title(s: str) -> str:
-    if is_task(s) or is_checkbox(s):
+    if is_task(s) or checkboxing.is_checkbox(s):
         t_symbol = ']'
     else:
         t_symbol = '#'
