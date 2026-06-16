@@ -64,6 +64,84 @@ class Document:
                     self.update(li, line)
         pass
 
+    def _convert_subtask_placeholder_at(self, index: int) -> None:
+        lines = self.lines()
+        prev = lines[index - 1]
+        parent_padding = checkboxing.get_padding(prev)
+        next_index = checkboxing.index_after_blank_run(lines, index)
+        child_padding = parent_padding + '    '
+        new_line = child_padding + '- [ ] '
+        self.update(index, new_line)
+        if next_index > index + 1:
+            # Collapse any extra blank lines in the same gap.
+            self.remove(index + 1, next_index - 1)
+
+    def maybe_insert_subtask_checkboxes(self) -> None:
+        index = 1
+        while index < len(self.lines()):
+            if checkboxing.should_convert_subtask_placeholder(self.lines(), index):
+                self._convert_subtask_placeholder_at(index)
+            index += 1
+
+    def _can_add_trailing_checkbox(self, start: int, end: int, unused_files_topic: str) -> bool:
+        lines = self.lines()
+        start_line = lines[start]
+        group_padding = checkboxing.get_padding(start_line)
+        all_completed = True
+        if len(group_padding) > 0 and start > 0:
+            # Nested groups need a completed parent before trailing slots make sense.
+            nested_group_parent_completed = lines[start - 1].strip().startswith('- [x]')
+            if not nested_group_parent_completed:
+                all_completed = False
+
+        for gl in lines[start:end + 1]:
+            if not checkboxing.is_checkbox(gl, status='x'):
+                # Any open checkbox means the group still needs a slot.
+                all_completed = False
+
+        if all_completed:
+            return False
+
+        already_has_trailing_checkbox = lines[end].rstrip() == group_padding + '- [ ]'
+        if already_has_trailing_checkbox:
+            # Group already ends with the auto-generated empty checkbox.
+            return False
+
+        end_line = lines[end]
+        if (checkboxing.get_padding(end_line) == group_padding
+                and checkboxing.is_checkbox(end_line, status=' ')
+                and len(checkboxing.get_line_title(end_line).strip()) == 0):
+            # Placeholder normalization already added the trailing slot at this level.
+            return False
+
+        if checkboxing.get_line_title(self.line(start - 1)) == unused_files_topic:
+            # Unused files are managed separately.
+            return False
+
+        return True
+
+    def inject_extra_checkboxes(self, unused_files_topic: str) -> None:
+        insertions = []
+        check_groups = self.get_check_groups_at_range(
+            start=0,
+            end=len(self.lines()) - 1,
+        )
+        for group in sort_by_end(check_groups):
+            start: int = group['start']
+            end: int = group['end']
+            if self._can_add_trailing_checkbox(start, end, unused_files_topic):
+                line = self.line(start)
+                padding = checkboxing.get_padding(line)
+                insertions.append(
+                    {
+                        'end': end + 1,
+                        'line': padding + '- [ ] '
+                    }
+                )
+
+        for insertion in sort_by_end(insertions):
+            self.insert(insertion['end'], insertion['line'])
+
     def has_changed(self):
         return self._changed
 
@@ -403,44 +481,6 @@ def read_lines(src) -> [str]:
         return list(map(remove_trailing_newline, file.readlines()))
 
 
-def checkbox_status_index(line) -> int:
-    if not checkboxing.is_checkbox(line):
-        return -1
-
-    return len(checkboxing.get_padding(line)) + 3
-
-
-def is_task(line: str, status: str = None) -> bool:
-    line = line.lstrip()
-
-    while line.startswith('#'):
-        line = line.removeprefix('#')
-    line = '-' + line
-    index = checkbox_status_index(line)
-
-    if index < 0:
-        return False
-
-    if status and line[index] != status:
-        return False
-    return True
-
-
-def get_line_title(s: str) -> str:
-    if is_task(s) or checkboxing.is_checkbox(s):
-        t_symbol = ']'
-    else:
-        t_symbol = '#'
-        while s.startswith('##'):
-            s = s.removeprefix('#')
-    if len(s) == 0:
-        return s
-    ti = s.find(t_symbol)
-    if ti < 0:
-        return ''
-    return s[ti + 1:].strip()
-
-
 def get_topic_level(line: str) -> int:
     level = 0
     while line.startswith('#'):
@@ -653,3 +693,14 @@ def has_shell_output_link(line: str) -> bool:
 
 def has_retcode_or_shell_output_link(line: str) -> bool:
     return has_retcode_link(line) or has_shell_output_link(line)
+
+
+# Re-export checkbox helpers for callers that import them from document.
+STATUS_IN_PROGRESS = checkboxing.STATUS_IN_PROGRESS
+STATUS_URGENT = checkboxing.STATUS_URGENT
+STATUS_OPEN = checkboxing.STATUS_OPEN
+get_padding = checkboxing.get_padding
+is_checkbox = checkboxing.is_checkbox
+checkbox_status_index = checkboxing.checkbox_status_index
+is_task = checkboxing.is_task
+get_line_title = checkboxing.get_line_title
