@@ -5,8 +5,9 @@ import subprocess
 import tempfile
 import time
 import unittest
+import urllib.request
 
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 CALENDAR_DIR = os.path.join(REPO_ROOT, 'utils', 'calendar')
 TEST_TMP_ROOT = os.path.join(CALENDAR_DIR, '.test_tmp')
 GIT_ENV = {
@@ -55,14 +56,17 @@ def _cleanup_calendar_service():
     shutil.rmtree(os.path.join(CALENDAR_DIR, 'repo_storage'), ignore_errors=True)
 
 
-def _wait_for_ics(timeout_seconds: float = 30) -> str:
-    ics_path = os.path.join(CALENDAR_DIR, 'reminders.ics')
+def _wait_for_ics(timeout_seconds: float = 120) -> str:
+    ics_host = os.environ.get('ICS_HOST', 'localhost')
+    ics_url = f'http://{ics_host}:37200/reminders.ics'
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        if os.path.isfile(ics_path):
-            return ics_path
-        time.sleep(0.2)
-    raise TimeoutError(f'ICS file was not created at {ics_path}')
+        try:
+            with urllib.request.urlopen(ics_url) as response:
+                return response.read().decode()
+        except Exception:
+            time.sleep(0.5)
+    raise TimeoutError(f'ICS file was not served at {ics_url}')
 
 
 class TestCalendarRepoSync(unittest.TestCase):
@@ -79,9 +83,13 @@ class TestCalendarRepoSync(unittest.TestCase):
         _init_notes_repo(self.notes_repo)
         _run_git(['clone', '--bare', self.notes_repo, self.bare_repo], self.work_dir)
 
+        bare_repo_in_container = '/app/utils/calendar/' + os.path.relpath(
+            self.bare_repo, CALENDAR_DIR
+        ).replace(os.sep, '/')
+
         with open(self.config_path, 'w') as f:
             json.dump({
-                'repo_uri': 'file://' + self.bare_repo,
+                'repo_uri': 'file://' + bare_repo_in_container,
                 'ignore_paths_like': [],
             }, f)
 
@@ -96,9 +104,7 @@ class TestCalendarRepoSync(unittest.TestCase):
             check=True,
         )
 
-        ics_path = _wait_for_ics()
-        with open(ics_path, 'r') as f:
-            ics_content = f.read()
+        ics_content = _wait_for_ics()
 
         self.assertIn('reminder checkpoint', ics_content)
         self.assertTrue(os.path.isdir(os.path.join(CALENDAR_DIR, 'repo_storage', 'notes')))

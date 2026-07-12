@@ -2,9 +2,15 @@
 Scans Markdown files for reminders, processes them as an .ics calendar file over a local HTTP server.
 
 # Quick start
+Requires Docker installed and running.
+
 ```sh
 ./start.sh /path/to/config.json
+# ICS: http://localhost:37200/reminders.ics
+./stop.sh
 ```
+
+Logs: `docker logs -f task-master-calendar`
 
 Config.json format example
 ```json
@@ -23,9 +29,15 @@ Config.json format example
   * `"archive"` → skips `notes/archive/todo.md`
   * `"tmp"` → skips `notes/tmp/file.md`
 
+# SSH git access
+For SSH `repo_uri` values, the container mounts your host `~/.ssh` read-only at `/root/.ssh`.
+Ensure your private key and `known_hosts` entry for the git host are present on the host before starting.
+
 # Tests
-Run from `utils/calendar/` (requires `../../setup.sh` for the TaskMaster venv):
+Run from `utils/calendar/` (requires Docker):
 
 ```sh
 ./testrun.sh
 ```
+
+Pytest runs inside the calendar Docker image (overriding the default entrypoint). The HTML report is written to `utils/calendar/report.html` on the host for CI artifact upload.
