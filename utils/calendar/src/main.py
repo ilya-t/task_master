@@ -15,7 +15,7 @@ import re
 
 GENERATED_DESC = 'auto-generated event'
 DEFAULT_DURATION_MINUTES = 30
-PYTHON_SCRIPT_PATH = os.path.dirname(__file__)
+PYTHON_SCRIPT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 ICS_FILENAME="reminders.ics"
 REPO_STORAGE_DIR = os.path.join(PYTHON_SCRIPT_PATH, 'repo_storage')
 

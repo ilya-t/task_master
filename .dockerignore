@@ -1,0 +1,12 @@
+.idea
+.git
+src/venv
+utils/calendar/.test_tmp
+utils/calendar/repo_storage
+utils/calendar/reminders.ics
+utils/calendar/service.log
+utils/calendar/service.pid
+utils/calendar/report.html
+utils/calendar/__pycache__
+utils/calendar/src/__pycache__
+**/__pycache__

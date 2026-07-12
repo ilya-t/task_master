@@ -14,19 +14,49 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-cd ../..
-TASK_MASTER_DIR=$(pwd)
-cd -
-
+CALENDAR_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$CALENDAR_DIR/../.." && pwd)"
+CALENDAR_DIR_HOST="${HOST_CALENDAR_DIR:-$CALENDAR_DIR}"
+REPO_ROOT_HOST="${HOST_REPO_ROOT:-$REPO_ROOT}"
+IMAGE_NAME="task-master-calendar"
+CONTAINER_NAME="task-master-calendar"
 PORT=37200
-PID_FILE="$(pwd)/service.pid"
-LOG_FILE="$(pwd)/service.log"
+
+if [ "$CALENDAR_DIR" != "$CALENDAR_DIR_HOST" ] && [[ "$CONFIG_FILE" == "$CALENDAR_DIR"/* ]]; then
+    CONFIG_FILE_HOST="$CALENDAR_DIR_HOST/${CONFIG_FILE#$CALENDAR_DIR/}"
+else
+    CONFIG_FILE_HOST="$CONFIG_FILE"
+fi
+
+if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    echo "Removing existing container: $CONTAINER_NAME"
+    docker rm -f "$CONTAINER_NAME" > /dev/null
+fi
+
+if [ "$SKIP_DOCKER_BUILD" != "1" ]; then
+    echo "Building Docker image..."
+    docker build -t "$IMAGE_NAME" -f "$CALENDAR_DIR/Dockerfile" "$REPO_ROOT_HOST"
+fi
+
+SSH_HOME="${HOST_HOME:-$HOME}"
 
 echo "Starting service..."
+DOCKER_RUN_ARGS=(
+    -d
+    --name "$CONTAINER_NAME"
+    --restart unless-stopped
+    -p "$PORT:$PORT"
+    -v "$CALENDAR_DIR_HOST:/app/utils/calendar"
+    -v "$CONFIG_FILE_HOST:/config/config.json:ro"
+    -e CONFIG_PATH=/config/config.json
+)
 
-$TASK_MASTER_DIR/src/venv/bin/python3.11 main.py $TASK_MASTER_DIR $PORT --config "$CONFIG_FILE" > $LOG_FILE 2>&1 &
+if [ -d "$SSH_HOME/.ssh" ]; then
+    DOCKER_RUN_ARGS+=(-v "$SSH_HOME/.ssh:/root/.ssh:ro")
+fi
 
-PID=$!
-echo $PID > $PID_FILE
+docker run "${DOCKER_RUN_ARGS[@]}" "$IMAGE_NAME"
 
-echo "Service started in background (pid: $PID , logs: $LOG_FILE)"
+echo "Service started in Docker (container: $CONTAINER_NAME)"
+echo "ICS URL: http://localhost:$PORT/reminders.ics"
+echo "Logs: docker logs -f $CONTAINER_NAME"
