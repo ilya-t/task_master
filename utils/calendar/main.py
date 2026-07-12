@@ -2,6 +2,7 @@ import time
 import datetime
 import json
 import os.path
+import shlex
 import subprocess
 import sys
 import threading
@@ -16,6 +17,7 @@ GENERATED_DESC = 'auto-generated event'
 DEFAULT_DURATION_MINUTES = 30
 PYTHON_SCRIPT_PATH = os.path.dirname(__file__)
 ICS_FILENAME="reminders.ics"
+REPO_STORAGE_DIR = os.path.join(PYTHON_SCRIPT_PATH, 'repo_storage')
 
 
 def prettify_title(raw: str) -> str:
@@ -211,6 +213,34 @@ def capture_output(cmd: str, ignore_errors=False) -> Union[str, None]:
         raise e
 
 
+def repo_name_from_uri(uri: str) -> str:
+    uri = uri.rstrip('/')
+    if uri.endswith('.git'):
+        uri = uri[:-4]
+    if ':' in uri and '@' in uri.split(':', 1)[0]:
+        return uri.split(':', 1)[-1].split('/')[-1]
+    return uri.split('/')[-1]
+
+
+def ensure_repo_cloned(repo_uri: str) -> str:
+    repo_name = repo_name_from_uri(repo_uri)
+    local_path = os.path.join(REPO_STORAGE_DIR, repo_name)
+    if not os.path.isdir(os.path.join(local_path, '.git')):
+        os.makedirs(REPO_STORAGE_DIR, exist_ok=True)
+        capture_output(f'git clone {shlex.quote(repo_uri)} {shlex.quote(local_path)}')
+    return local_path
+
+
+def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: list) -> str:
+    notes_dir = ensure_repo_cloned(repo_uri)
+    print('Updating your notes!')
+    capture_output(f'cd {shlex.quote(notes_dir)} && git pull --rebase')
+    print('Generating reminders!')
+    reminders = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
+    generate_ics(reminders)
+    return os.path.join(PYTHON_SCRIPT_PATH, ICS_FILENAME)
+
+
 def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: list) -> {}:
     results = {}
     for root, dir, files in os.walk(notes_dir):
@@ -232,13 +262,9 @@ def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: 
     return results
 
 
-def sync(task_master_dir: str, notes_dir: str, port: int, ignore_paths_like: list):
+def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list):
     def update_reminders():
-        print('Updating your notes!')
-        capture_output(f'cd {notes_dir} && git pull --rebase') # TODO: let user decide how to update
-        print('Generating reminders!')
-        reminders: {} = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
-        generate_ics(reminders)
+        sync_reminders_once(task_master_dir, repo_uri, ignore_paths_like)
 
     def update_reminders_loop():
         while True:
@@ -266,7 +292,7 @@ def main():
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to JSON config file containing notes_dir and ignore_paths_like"
+        help="Path to JSON config file containing repo_uri and ignore_paths_like"
     )
 
     args = parser.parse_args()
@@ -274,12 +300,12 @@ def main():
     with open(args.config, "r") as f:
         config = json.load(f)
 
-    notes_dir = config["notes_dir"]
+    repo_uri = config["repo_uri"]
     ignore_paths_like = config.get("ignore_paths_like", [])
 
     sync(
         task_master_dir=args.task_master_dir,
-        notes_dir=notes_dir,
+        repo_uri=repo_uri,
         port=args.port,
         ignore_paths_like=ignore_paths_like,
     )

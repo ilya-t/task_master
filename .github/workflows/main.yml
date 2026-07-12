@@ -20,9 +20,14 @@ jobs:
         run: |
           ./setup.sh
 
-      - name: Run tests
+      - name: Run main tests
         run: |
           cd src
+          ./testrun.sh
+
+      - name: Run calendar util tests
+        run: |
+          cd utils/calendar
           ./testrun.sh
 
       - name: Upload test report
@@ -31,3 +36,10 @@ jobs:
         with:
           name: pytest-html-report
           path: src/tests/report.html
+
+      - name: Upload calendar test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-test-report
+          path: utils/calendar/report.html

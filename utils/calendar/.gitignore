@@ -1,5 +1,9 @@
-reminders.ics
+__pycache__
 .DS_Store
-service.pid
-service.log
+.test_tmp/
 config.json
+reminders.ics
+report.html
+repo_storage/
+service.log
+service.pid
