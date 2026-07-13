@@ -18,4 +18,6 @@
 - [!] 2025.10.31 12:15: remind in 15 minutes from now
 - [!] 2025.10.31 15:00: remind today at 15:00
 - [!] 2025.11.03: remind next monday
+- [!] 2026.06.21 15:00:
+  - [ ] reminder may not have title 
 - [ ] 

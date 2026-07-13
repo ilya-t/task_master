@@ -9,3 +9,5 @@
 - [!] +15m: remind in 15 minutes from now
 - [!] 15:00: remind today at 15:00
 - [!] MON: remind next monday
+- [!] 2026.06.21 15:00:
+  - [ ] reminder may not have title 

@@ -266,6 +266,9 @@ class TaskMaster:
                     continue
                 l = self._doc.line(li)
 
+                if document.is_task(l):
+                    continue
+
                 if document.is_checkbox(l, document.STATUS_OPEN):
                     return li
 
