@@ -655,8 +655,11 @@ def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Op
     raw_date_and_title = line.split(': ', 1)
 
     if len(raw_date_and_title) != 2:
-        return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
-    content = raw_date_and_title[0].strip()
+        if not line.endswith(':') or ': ' in line:
+            return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
+        content = line[:-1].strip()
+    else:
+        content = raw_date_and_title[0].strip()
 
     date_with_time_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{1,2}:\d{2}\b', content)
     date_only_match = re.match(r'\b\d{4}\.\d{2}\.\d{2}\b', content)
