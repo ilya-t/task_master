@@ -216,9 +216,14 @@ class TaskMaster:
         return address[-1] if address else title
 
     def _format_reminder_topic_prefix(self, topic_title: str) -> str:
-        if len(topic_title) > REMINDER_TOPIC_PREFIX_MAX_LEN:
-            return topic_title[:REMINDER_TOPIC_PREFIX_MAX_LEN] + '...'
-        return topic_title
+        if len(topic_title) <= REMINDER_TOPIC_PREFIX_MAX_LEN:
+            return topic_title
+
+        topic_title = topic_title.replace('`', '')
+        if len(topic_title) <= REMINDER_TOPIC_PREFIX_MAX_LEN:
+            return topic_title
+
+        return topic_title[:REMINDER_TOPIC_PREFIX_MAX_LEN] + '...'
 
     def _prepare_reminders_topic_lines(self, reminders: []) -> [{}]:
         results = []
