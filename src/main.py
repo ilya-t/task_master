@@ -33,6 +33,7 @@ ACTIVE_TASKS_OVERVIEW = f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}'
 REMINDERS_TOPIC = '>>> (Reminders) <<<'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
+REMINDER_TOPIC_PREFIX_MAX_LEN = 50
 
 CONFIG_TYPOS = 'typos'
 CONFIG_DIVE_IN_TEMPLATE = 'dive-in_template'
@@ -205,6 +206,20 @@ class TaskMaster:
             self._doc.insert_all(index=task_start, lines=new_task_lines)
         pass
 
+    def _reminder_topic_title(self, reminder: {}) -> str:
+        topic = self._doc.get_topic_by_line(reminder['line_index'])
+        if not topic:
+            return ''
+
+        title = document.get_line_title(self._doc.line(topic['start']))
+        address = document.split_title_to_address(title)
+        return address[-1] if address else title
+
+    def _format_reminder_topic_prefix(self, topic_title: str) -> str:
+        if len(topic_title) > REMINDER_TOPIC_PREFIX_MAX_LEN:
+            return topic_title[:REMINDER_TOPIC_PREFIX_MAX_LEN] + '...'
+        return topic_title
+
     def _prepare_reminders_topic_lines(self, reminders: []) -> [{}]:
         results = []
 
@@ -216,10 +231,13 @@ class TaskMaster:
         })
 
         for r in reminders:
+            topic_prefix = self._format_reminder_topic_prefix(self._reminder_topic_title(r))
+            prefix = f'{topic_prefix}: ' if topic_prefix else ''
             results.append({
                 'indent': '',
                 'title': r['title'],
                 'line_index': r['line_index'],
+                'prefix': prefix,
             })
 
         return results
@@ -476,8 +494,9 @@ class TaskMaster:
         for r in raw_lines:
             if 'line_index' in r:
                 shifted_index = r['line_index'] + ongoing_topic_height
+                prefix = r.get('prefix', '')
                 lines.append(
-                    f"{r['indent']}- [{r['title']}]({os.path.basename(self._target_file)}#L{shifted_index})"
+                    f"{r['indent']}- {prefix}[{r['title']}]({os.path.basename(self._target_file)}#L{shifted_index})"
                 )
             else:
                 if 'indent' in r:
