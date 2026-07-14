@@ -4,6 +4,8 @@ import re
 from datetime import datetime, timedelta
 from typing import Union, Tuple, Optional
 
+INVALID_DATE_FORMAT_MESSAGE = "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>, +<N>m, or +<N>h, or MON, TUE, WED, THU, FRI, SAT, SUN"
+
 
 class Document:
     def __init__(self, file: str):
@@ -629,13 +631,21 @@ def format_reminder_date(line: str, now: datetime) -> Optional[str]:
         dt = now + delta
         return line.replace(rel_hr_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
 
-    # Weekday: MON (next Monday)
-    weekday_match = re.search(r'\bMON\b', content, re.IGNORECASE)
+    # Relative: +N (shorthand for +Nm)
+    rel_min_short_match = re.search(r'\+(\d+)\b', content)
+    if rel_min_short_match:
+        delta = timedelta(minutes=int(rel_min_short_match.group(1)))
+        dt = now + delta
+        return line.replace(rel_min_short_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
+
+    # Weekday: MON..SUN (next matching weekday)
+    weekday_names = {'MON': 0, 'TUE': 1, 'WED': 2, 'THU': 3, 'FRI': 4, 'SAT': 5, 'SUN': 6}
+    weekday_match = re.search(r'\b(MON|TUE|WED|THU|FRI|SAT|SUN)\b', content, re.IGNORECASE)
     if weekday_match:
-        today = now
-        days_ahead = (0 - today.weekday() + 7) % 7  # 0 is Monday
-        days_ahead = 7 if days_ahead == 0 else days_ahead  # Ensure it's the *next* Monday
-        dt = today + timedelta(days=days_ahead)
+        target_weekday = weekday_names[weekday_match.group(1).upper()]
+        days_ahead = (target_weekday - now.weekday() + 7) % 7
+        days_ahead = 7 if days_ahead == 0 else days_ahead  # Ensure it's the *next* weekday
+        dt = now + timedelta(days=days_ahead)
         dt = dt.replace(hour=9, minute=0, second=0, microsecond=0)
         return line.replace(weekday_match.group(0), dt.strftime('%Y.%m.%d'), 1)
 
@@ -656,7 +666,7 @@ def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Op
 
     if len(raw_date_and_title) != 2:
         if not line.endswith(':') or ': ' in line:
-            return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
+            return None, INVALID_DATE_FORMAT_MESSAGE
         content = line[:-1].strip()
     else:
         content = raw_date_and_title[0].strip()
@@ -674,7 +684,7 @@ def extract_reminder_date(line: str, now: Optional[datetime] = None) -> Tuple[Op
         date_str = f"{now.strftime('%Y.%m.%d')} {time_only_match.group()}"
 
     if not date_str:
-        return None, "Invalid date format! Expecting YYYY.MM.DD, YYYY.MM.DD HH:mm, HH:mm, +<N>m, or +<N>h, or MON"
+        return None, INVALID_DATE_FORMAT_MESSAGE
 
     date_obj = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
     return date_obj, ""

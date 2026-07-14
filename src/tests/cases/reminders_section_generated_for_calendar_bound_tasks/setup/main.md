@@ -7,7 +7,14 @@
 - [-] ongoing task
 - [!] +2h: remind in 2 hours from now
 - [!] +15m: remind in 15 minutes from now
+- [!] +30: remind in 30 minutes from now
 - [!] 15:00: remind today at 15:00
 - [!] MON: remind next monday
+- [!] TUE: remind next tuesday
+- [!] WED: remind next wednesday
+- [!] THU: remind next thursday
+- [!] FRI: remind next friday
+- [!] SAT: remind next saturday
+- [!] SUN: remind next sunday
 - [!] 2026.06.21 15:00:
   - [ ] reminder may not have title 
