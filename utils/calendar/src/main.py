@@ -231,10 +231,21 @@ def ensure_repo_cloned(repo_uri: str) -> str:
     return local_path
 
 
+def update_notes_repo(notes_dir: str):
+    """Fetch and hard-reset to upstream. Local clone is a disposable read-only mirror."""
+    quoted = shlex.quote(notes_dir)
+    capture_output(f'cd {quoted} && git fetch --prune origin')
+    upstream = capture_output(
+        f'cd {quoted} && git rev-parse --abbrev-ref --symbolic-full-name @{{u}}'
+    ).strip()
+    capture_output(f'cd {quoted} && git reset --hard {shlex.quote(upstream)}')
+    capture_output(f'cd {quoted} && git clean -fd')
+
+
 def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: list) -> str:
     notes_dir = ensure_repo_cloned(repo_uri)
     print('Updating your notes!')
-    capture_output(f'cd {shlex.quote(notes_dir)} && git pull --rebase')
+    update_notes_repo(notes_dir)
     print('Generating reminders!')
     reminders = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
     generate_ics(reminders)
@@ -269,7 +280,10 @@ def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list
     def update_reminders_loop():
         while True:
             time.sleep(3600) # 1h
-            update_reminders()
+            try:
+                update_reminders()
+            except Exception as e:
+                print(f'Reminders update failed (will retry next hour): {e}')
 
     def serve():
         print(f'Serving local iCal server at: http://localhost:{port}/{ICS_FILENAME}')

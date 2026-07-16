@@ -10,24 +10,17 @@ if ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -S /var/run/docker.sock ]; then
-    echo "Docker socket not found at /var/run/docker.sock"
-    exit 1
-fi
+mkdir -p "$CALENDAR_DIR/.test_tmp"
+: > "$CALENDAR_DIR/report.html"
 
 echo "Building Docker image..."
 docker build -t "$IMAGE_NAME" -f "$CALENDAR_DIR/Dockerfile" "$REPO_ROOT"
 
 echo "Running calendar tests in Docker..."
 docker run --rm \
-    --add-host=host.docker.internal:host-gateway \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$CALENDAR_DIR:/app/utils/calendar" \
-    -e SKIP_DOCKER_BUILD=1 \
-    -e HOST_HOME="$HOME" \
-    -e HOST_CALENDAR_DIR="$CALENDAR_DIR" \
-    -e HOST_REPO_ROOT="$REPO_ROOT" \
-    -e ICS_HOST=host.docker.internal \
+    -v "$CALENDAR_DIR/.test_tmp:/app/utils/calendar/.test_tmp" \
+    -v "$CALENDAR_DIR/report.html:/app/utils/calendar/report.html" \
+    -e TASK_MASTER_DIR=/app \
     -w /app/utils/calendar \
     --entrypoint /app/src/venv/bin/python3.11 \
     "$IMAGE_NAME" \
