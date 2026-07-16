@@ -5,14 +5,14 @@ Scans Markdown files for reminders, processes them as an .ics calendar file over
 Requires Docker installed and running.
 
 ```sh
-./start.sh /path/to/config.json
+./start.sh
 # ICS: http://localhost:37200/reminders.ics
 ./stop.sh
 ```
 
 Logs: `docker logs -f task-master-calendar`
 
-Config.json format example
+Place your config at `config/config.json`:
 ```json
 {
   "repo_uri": "https://github.com/my/notes",
