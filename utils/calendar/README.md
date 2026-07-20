@@ -16,12 +16,17 @@ Place your config at `config/config.json`:
 ```json
 {
   "repo_uri": "https://github.com/my/notes",
+  "timezone_offset_min": 60,
   "ignore_paths_like": ["archive", "tmp", "private"]
 }
 ```
 * **repo_uri** (required)
   Git repository URL containing your Markdown notes. Supports HTTPS (`https://github.com/my/notes`) and SSH (`git@github.com:my/notes.git`).
   The repo is cloned to `utils/calendar/repo_storage/<repo_name>/` (for example, `utils/calendar/repo_storage/notes/`).
+
+* **timezone_offset_min** (optional, default: `0`)
+  Shifts event timestamps in the ICS output by the given offset from UTC. This ensures events display at the correct wall-clock time regardless of the calendar app's timezone.
+  Example: `60` shifts events by +1 hour (UTC+01:00). A reminder at 12:00 in your notes will appear as 12:00 on a device set to UTC+01:00.
 
 * **ignore_paths_like** (optional)
   List of substrings. If a file's relative path contains any of them, it will be skipped.

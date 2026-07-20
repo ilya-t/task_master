@@ -147,7 +147,7 @@ def format_ics_text(text):
     # Fold using CRLF + SPACE
     return '\r\n '.join(folded)
 
-def generate_ics(reminders: dict):
+def generate_ics(reminders: dict, offset_min: int = 0):
     """
     Generates an .ics calendar file from reminders and optionally serves it.
     """
@@ -159,8 +159,9 @@ def generate_ics(reminders: dict):
     output_file = os.path.join(PYTHON_SCRIPT_PATH, ICS_FILENAME)
 
     def format_dt(ts: int) -> str:
-        dt = datetime.datetime.utcfromtimestamp(ts)
-        return dt.strftime("%Y%m%dT%H%M%S") + 'Z' # to mark that we're passing UTC
+        shifted_ts = ts + offset_min * 60
+        dt = datetime.datetime.fromtimestamp(shifted_ts, tz=datetime.timezone.utc)
+        return dt.strftime("%Y%m%dT%H%M%S") + 'Z' # shifted by offset_min, then marked as UTC
 
     lines = [
         "BEGIN:VCALENDAR",
@@ -195,6 +196,7 @@ def generate_ics(reminders: dict):
         f.write("\n".join(lines))
 
     print(f"ICS file generated at: {output_file}")
+    return output_file
 
 
 def capture_output(cmd: str, ignore_errors=False) -> Union[str, None]:
@@ -242,13 +244,13 @@ def update_notes_repo(notes_dir: str):
     capture_output(f'cd {quoted} && git clean -fd')
 
 
-def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: list) -> str:
+def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: list, offset_min: int = 0) -> str:
     notes_dir = ensure_repo_cloned(repo_uri)
     print('Updating your notes!')
     update_notes_repo(notes_dir)
     print('Generating reminders!')
     reminders = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
-    generate_ics(reminders)
+    generate_ics(reminders, offset_min=offset_min)
     return os.path.join(PYTHON_SCRIPT_PATH, ICS_FILENAME)
 
 
@@ -273,9 +275,9 @@ def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: 
     return results
 
 
-def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list):
+def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list, offset_min: int = 0):
     def update_reminders():
-        sync_reminders_once(task_master_dir, repo_uri, ignore_paths_like)
+        sync_reminders_once(task_master_dir, repo_uri, ignore_paths_like, offset_min=offset_min)
 
     def update_reminders_loop():
         while True:
@@ -316,12 +318,14 @@ def main():
 
     repo_uri = config["repo_uri"]
     ignore_paths_like = config.get("ignore_paths_like", [])
+    timezone_offset_min = config.get("timezone_offset_min", 0)
 
     sync(
         task_master_dir=args.task_master_dir,
         repo_uri=repo_uri,
         port=args.port,
         ignore_paths_like=ignore_paths_like,
+        offset_min=timezone_offset_min,
     )
 
 

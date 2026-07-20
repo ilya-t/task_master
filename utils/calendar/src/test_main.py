@@ -124,5 +124,83 @@ class TestCalendarRepoSync(unittest.TestCase):
         self.assertTrue(os.path.isdir(os.path.join(CALENDAR_DIR, 'repo_storage', 'notes')))
 
 
+class TestGenerateIcsTimezoneOffset(unittest.TestCase):
+    def setUp(self):
+        self.ics_dir = tempfile.mkdtemp(dir=TEST_TMP_ROOT)
+        self.original_path = calendar_main.PYTHON_SCRIPT_PATH
+        calendar_main.PYTHON_SCRIPT_PATH = self.ics_dir
+        calendar_main.ICS_FILENAME = 'test_reminders.ics'
+
+    def tearDown(self):
+        calendar_main.PYTHON_SCRIPT_PATH = self.original_path
+        shutil.rmtree(self.ics_dir, ignore_errors=True)
+
+    def _make_reminder(self, timestamp: int, title: str = 'test event') -> dict:
+        return {
+            f'file/{title}/{timestamp}': {
+                'title': title,
+                'summary': f'{title}\n\n=====================\nauto-generated event',
+                'timestamp': timestamp,
+                'duration_minutes': 30,
+                'add_notification': True,
+            }
+        }
+
+    def test_generate_ics_with_zero_offset(self):
+        """Offset 0 should produce same output as current behavior (no shift)."""
+        ts = 1721462400  # 2024-07-20T08:00:00Z
+        reminders = self._make_reminder(ts)
+        ics_path = calendar_main.generate_ics(reminders, offset_min=0)
+
+        with open(ics_path) as f:
+            content = f.read()
+
+        # DTSTART should be at 08:00:00Z (no shift)
+        self.assertIn('DTSTART:20240720T080000Z', content)
+        self.assertIn('DTEND:20240720T083000Z', content)
+
+    def test_generate_ics_with_positive_offset(self):
+        """Offset 60 should shift timestamps by +1 hour."""
+        ts = 1721462400  # 2024-07-20T08:00:00Z
+        reminders = self._make_reminder(ts)
+        ics_path = calendar_main.generate_ics(reminders, offset_min=60)
+
+        with open(ics_path) as f:
+            content = f.read()
+
+        # DTSTART should be shifted to 09:00:00Z
+        self.assertIn('DTSTART:20240720T090000Z', content)
+        self.assertIn('DTEND:20240720T093000Z', content)
+
+    def test_generate_ics_with_negative_offset(self):
+        """Offset -120 should shift timestamps by -2 hours."""
+        ts = 1721462400  # 2024-07-20T08:00:00Z
+        reminders = self._make_reminder(ts)
+        ics_path = calendar_main.generate_ics(reminders, offset_min=-120)
+
+        with open(ics_path) as f:
+            content = f.read()
+
+        # DTSTART should be shifted to 06:00:00Z
+        self.assertIn('DTSTART:20240720T060000Z', content)
+        self.assertIn('DTEND:20240720T063000Z', content)
+
+    def test_generate_ics_offset_affects_all_events(self):
+        """All events in the ICS should be shifted by the offset."""
+        ts1 = 1721462400  # 2024-07-20T08:00:00Z
+        ts2 = 1721466000  # 2024-07-20T09:00:00Z
+        reminders = {}
+        reminders.update(self._make_reminder(ts1, 'event one'))
+        reminders.update(self._make_reminder(ts2, 'event two'))
+        ics_path = calendar_main.generate_ics(reminders, offset_min=60)
+
+        with open(ics_path) as f:
+            content = f.read()
+
+        # Both events shifted by +1 hour
+        self.assertIn('DTSTART:20240720T090000Z', content)
+        self.assertIn('DTSTART:20240720T100000Z', content)
+
+
 if __name__ == '__main__':
     unittest.main()
