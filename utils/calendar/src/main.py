@@ -26,24 +26,24 @@ def prettify_title(raw: str) -> str:
     processed = processed.replace('`', '')
     return processed
 
-def task_master_reminders_to_internal_model(reminders_file: str, reminders_json: {}) -> {}:
+def task_master_reminders_to_internal_model(reminders_file: str, reminders_json: {}, offset_min: int = 0) -> {}:
     reminders = reminders_json['reminders']
     now = datetime.datetime.now()
     filename = os.path.splitext(os.path.basename(reminders_file))[0]
     
-    today_start = datetime.datetime(now.year, now.month, now.day)
-    
-    local_time = datetime.datetime.now().astimezone()
+    offset_tz = datetime.timezone(datetime.timedelta(minutes=offset_min))
+    now_tz = datetime.datetime.now(offset_tz)
+    today_start = datetime.datetime(now_tz.year, now_tz.month, now_tz.day)
 
     start_of_day = int(today_start.timestamp())
-    end_of_day = int(datetime.datetime(now.year, now.month, now.day, 23, 59, 59).timestamp())
+    end_of_day = start_of_day + 86399  # 23:59:59
     # shifting time by default duration would place event right to end of day and not pass to second day
     end_of_day_timestamp = end_of_day - (DEFAULT_DURATION_MINUTES * 60)
 
     results = {}
     for r in reminders:
         title = prettify_title(r['title'])
-        timestamp = int(r['timestamp'])
+        timestamp = int(r['timestamp']) + offset_min * 60
         event_time = datetime.datetime.fromtimestamp(timestamp)
         is_outdated = event_time < today_start
 
@@ -147,7 +147,7 @@ def format_ics_text(text):
     # Fold using CRLF + SPACE
     return '\r\n '.join(folded)
 
-def generate_ics(reminders: dict, offset_min: int = 0):
+def generate_ics(reminders: dict):
     """
     Generates an .ics calendar file from reminders and optionally serves it.
     """
@@ -159,9 +159,8 @@ def generate_ics(reminders: dict, offset_min: int = 0):
     output_file = os.path.join(PYTHON_SCRIPT_PATH, ICS_FILENAME)
 
     def format_dt(ts: int) -> str:
-        shifted_ts = ts + offset_min * 60
-        dt = datetime.datetime.fromtimestamp(shifted_ts, tz=datetime.timezone.utc)
-        return dt.strftime("%Y%m%dT%H%M%S") + 'Z' # shifted by offset_min, then marked as UTC
+        dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+        return dt.strftime("%Y%m%dT%H%M%S") + 'Z'
 
     lines = [
         "BEGIN:VCALENDAR",
@@ -249,12 +248,12 @@ def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: 
     print('Updating your notes!')
     update_notes_repo(notes_dir)
     print('Generating reminders!')
-    reminders = generate_reminders(task_master_dir, notes_dir, ignore_paths_like)
-    generate_ics(reminders, offset_min=offset_min)
+    reminders = generate_reminders(task_master_dir, notes_dir, ignore_paths_like, offset_min=offset_min)
+    generate_ics(reminders)
     return os.path.join(PYTHON_SCRIPT_PATH, ICS_FILENAME)
 
 
-def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: list) -> {}:
+def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: list, offset_min: int = 0) -> {}:
     results = {}
     for root, dir, files in os.walk(notes_dir):
         for f in files:
@@ -268,7 +267,7 @@ def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: 
             if (f.endswith('.md')):
                 # print(f'Processing: {full_path}')
                 reminders_json: str = capture_output(task_master_dir + f'/run \'{full_path}\' --reminders')
-                reminders = task_master_reminders_to_internal_model(reminders_file = f, reminders_json = json.loads(reminders_json))
+                reminders = task_master_reminders_to_internal_model(reminders_file = f, reminders_json = json.loads(reminders_json), offset_min=offset_min)
                 results.update(reminders)
             # else:
                 # print(f'Skipped: {full_path}')
