@@ -25,7 +25,8 @@ Place your config at `config/config.json`:
   The repo is cloned to `utils/calendar/repo_storage/<repo_name>/` (for example, `utils/calendar/repo_storage/notes/`).
 
 * **timezone_offset_min** (optional, default: `0`)
-  Shifts event timestamps in the ICS output by the given offset from UTC. This ensures events display at the correct wall-clock time regardless of the calendar app's timezone.
+  Shift timestamps from task_master's reminders json. This ensures events display at the correct wall-clock time regardless of the calendar app's timezone.
+  If you're notes we're generetad under UTC+01 then pass `60` so calendar would generate events according this timezone.
   Example: `60` shifts events by +1 hour (UTC+01:00). A reminder at 12:00 in your notes will appear as 12:00 on a device set to UTC+01:00.
 
 * **ignore_paths_like** (optional)
