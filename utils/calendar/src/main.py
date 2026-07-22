@@ -43,7 +43,7 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
     results = {}
     for r in reminders:
         title = prettify_title(r['title'])
-        timestamp = int(r['timestamp']) + offset_min * 60
+        timestamp = int(r['timestamp']) - offset_min * 60
         event_time = datetime.datetime.fromtimestamp(timestamp)
         is_outdated = event_time < today_start
 
@@ -274,7 +274,7 @@ def generate_reminders(task_master_dir: str, notes_dir: str, ignore_paths_like: 
     return results
 
 
-def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list, offset_min: int = 0):
+def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list, offset_min: int, no_daemon: bool):
     def update_reminders():
         sync_reminders_once(task_master_dir, repo_uri, ignore_paths_like, offset_min=offset_min)
 
@@ -295,6 +295,9 @@ def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list
 
     print('Initial reminders preparation')
     update_reminders()
+
+    if no_daemon:
+        return
     thread = threading.Thread(target=update_reminders_loop, daemon=True)
     thread.start()
     serve()
@@ -302,6 +305,7 @@ def sync(task_master_dir: str, repo_uri: str, port: int, ignore_paths_like: list
 
 def main():
     parser = argparse.ArgumentParser(description="Sync reminders and serve ICS")
+    parser.add_argument("--no-daemon", action="store_true", dest="no_daemon", help="Run without daemon mode")
     parser.add_argument("task_master_dir")
     parser.add_argument("port", type=int)
     parser.add_argument(
@@ -325,6 +329,7 @@ def main():
         port=args.port,
         ignore_paths_like=ignore_paths_like,
         offset_min=timezone_offset_min,
+        no_daemon=args.no_daemon
     )
 
 
