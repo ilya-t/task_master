@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+ARG PRODID_NAME
+ENV PRODID_NAME=${PRODID_NAME}
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git openssh-client \
     && rm -rf /var/lib/apt/lists/*
