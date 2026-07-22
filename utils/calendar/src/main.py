@@ -35,25 +35,32 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
     now_tz = datetime.datetime.now(offset_tz)
     today_start = datetime.datetime(now_tz.year, now_tz.month, now_tz.day)
 
-    start_of_day = int(today_start.timestamp())
-    end_of_day = start_of_day + 86399  # 23:59:59
-    # shifting time by default duration would place event right to end of day and not pass to second day
-    end_of_day_timestamp = end_of_day - (DEFAULT_DURATION_MINUTES * 60)
+    def _end_of_day_timestamp_for_date(dt: datetime.datetime) -> int:
+        """Return the last second (23:29:59) of the given date in the offset timezone, as a UTC timestamp."""
+        day_start = datetime.datetime(dt.year, dt.month, dt.day, tzinfo=offset_tz)
+        day_end = int(day_start.timestamp()) + 86399  # 23:59:59
+        # shift back by default duration so event doesn't spill to next day
+        return day_end - (DEFAULT_DURATION_MINUTES * 60)
+
+    # Pre-compute today's end-of-day for outdated events
+    today_end_of_day = _end_of_day_timestamp_for_date(now_tz)
 
     results = {}
     for r in reminders:
         title = prettify_title(r['title'])
         timestamp = int(r['timestamp']) - offset_min * 60
-        event_time = datetime.datetime.fromtimestamp(timestamp)
-        is_outdated = event_time < today_start
+        event_time = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+        is_outdated = event_time < today_start.replace(tzinfo=offset_tz).astimezone(datetime.timezone.utc)
 
         if is_outdated:
             original_date_str = event_time.strftime("%Y.%m.%d")
-            timestamp = end_of_day_timestamp
+            timestamp = today_end_of_day
             title = f'[{original_date_str}] {title}'
 
-        if not r['exact_time'] and (start_of_day <= timestamp <= end_of_day):
-            timestamp = end_of_day_timestamp
+        if not r['exact_time']:
+            # Shift to end of the event's own day (in offset timezone)
+            event_date_in_offset = event_time.astimezone(offset_tz)
+            timestamp = _end_of_day_timestamp_for_date(event_date_in_offset)
 
         uid = f'{filename}/{title}/{str(timestamp)}'
         actual_summary = '' if title == r['title'] else r['title']
@@ -68,14 +75,14 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
 
     if 'errors' in reminders_json:
         errors = map(lambda it: it['title'], reminders_json['errors'])
-        uid = f'{filename}/_errors_/{str(end_of_day_timestamp)}'
+        uid = f'{filename}/_errors_/{str(today_end_of_day)}'
         error_desc = '\n - '.join(errors)
         results[uid] = {
             'title': f'{filename}: ERRORS!',
-            'summary':  f'Error Lines:\n - {error_desc}\n\n=====================\n{GENERATED_DESC}\nuid: {uid}\nfilename: {filename}', 
-            'timestamp': end_of_day_timestamp, 
-            'duration_minutes': DEFAULT_DURATION_MINUTES, 
-            'add_notification': not is_outdated,
+            'summary':  f'Error Lines:\n - {error_desc}\n\n=====================\n{GENERATED_DESC}\nuid: {uid}\nfilename: {filename}',
+            'timestamp': today_end_of_day,
+            'duration_minutes': DEFAULT_DURATION_MINUTES,
+            'add_notification': False,
         }
 
     return results
