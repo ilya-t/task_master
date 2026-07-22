@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -187,51 +188,125 @@ class TestGenerateIcs(unittest.TestCase):
         self.assertIn('DTSTART:20240720T090000Z', content)
 
 
-class TestTaskMasterRemindersToInternalModelTimezoneOffset(unittest.TestCase):
+class TestGenerateReminders(unittest.TestCase):
     def setUp(self):
-        self.ics_dir = tempfile.mkdtemp(dir=TEST_TMP_ROOT)
+        os.makedirs(TEST_TMP_ROOT, exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=TEST_TMP_ROOT)
+        self.work_dir = self.tmp.name
 
-    def _make_reminders_json(self, timestamp: int, title: str = 'test event', exact_time: bool = True) -> dict:
-        return {
-            'reminders': [
-                {
-                    'title': title,
-                    'timestamp': timestamp,
-                    'exact_time': exact_time,
-                }
-            ]
+        self.notes_repo = os.path.join(self.work_dir, 'notes_work')
+        self.bare_repo = os.path.join(self.work_dir, 'notes.git')
+
+        # Clean up any leftover ICS and repo_storage from previous runs
+        ics_path = os.path.join(CALENDAR_DIR, calendar_main.ICS_FILENAME)
+        if os.path.exists(ics_path):
+            os.remove(ics_path)
+        shutil.rmtree(os.path.join(CALENDAR_DIR, 'repo_storage'), ignore_errors=True)
+
+        self._init_notes_repo_with_reminder()
+        self._write_config()
+
+    def _log(self, msg: str):
+        """Write a line to stderr so it appears in test reports regardless of capture settings."""
+        sys.stderr.write(msg + '\n')
+        sys.stderr.flush()
+
+    def tearDown(self):
+        # Debug: dump repo state and generated ICS before cleanup
+        if hasattr(self, 'notes_repo') and os.path.isdir(self.notes_repo):
+            for root, _dirs, files in os.walk(self.notes_repo):
+                for f in files:
+                    if f.endswith('.md'):
+                        path = os.path.join(root, f)
+                        with open(path) as fh:
+                            self._log(f'--- {os.path.relpath(path, self.notes_repo)} ---')
+                            self._log(fh.read().rstrip())
+
+        ics_path = os.path.join(CALENDAR_DIR, 'reminders.ics')
+        if os.path.exists(ics_path):
+            self._log(f'--- reminders.ics ---')
+            with open(ics_path) as fh:
+                self._log(fh.read().rstrip())
+
+        self.tmp.cleanup()
+        if os.path.exists(ics_path):
+            os.remove(ics_path)
+        shutil.rmtree(os.path.join(CALENDAR_DIR, 'repo_storage'), ignore_errors=True)
+
+    def _init_notes_repo_with_reminder(self, content: str = '# Notes\n- [!] 2036.06.06 13:00: test reminder from subprocess\n'):
+        """Create a notes repo with a single README.md containing a reminder and a bare clone as local remote."""
+        os.makedirs(self.notes_repo, exist_ok=True)
+        with open(os.path.join(self.notes_repo, 'README.md'), 'w') as f:
+            f.write(content)
+        _run_git(['init'], self.notes_repo)
+        _run_git(['add', '.'], self.notes_repo)
+        _run_git(['commit', '-m', 'init notes'], self.notes_repo)
+        _run_git(['clone', '--bare', self.notes_repo, self.bare_repo], self.work_dir)
+
+    def _write_config(self, config_override: dict = None):
+        """Write config.json for the subprocess. Merge ``config_override`` into defaults."""
+        config = {
+            'repo_uri': 'file://' + self.bare_repo,
+            'ignore_paths_like': [],
         }
+        if config_override:
+            config.update(config_override)
+        self.config_path = os.path.join(self.work_dir, 'config.json')
+        with open(self.config_path, 'w') as f:
+            json.dump(config, f)
 
-    def test_zero_offset_passes_timestamp_unchanged(self):
-        """With offset_min=0, timestamp is not shifted."""
-        ts = 1893456000  # 2030-01-01T00:00:00Z (future, avoids outdated check)
-        reminders_json = self._make_reminders_json(ts)
-        result = calendar_main.task_master_reminders_to_internal_model(
-            'test.md', reminders_json, offset_min=0
+    def run_calendar_app(self) -> tuple:
+        """Run main.py as a subprocess with --no-daemon. Returns (result, ics_path)."""
+        result = subprocess.run(
+            [
+                sys.executable, 'main.py',
+                '--no-daemon',
+                TASK_MASTER_DIR,
+                '37200',
+                '--config', self.config_path,
+            ],
+            cwd=SRC_DIR,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**os.environ, 'TASK_MASTER_DIR': TASK_MASTER_DIR},
         )
-        for uid, r in result.items():
-            self.assertEqual(r['timestamp'], ts)
-
-    def test_positive_offset_shifts_timestamp(self):
-        """With offset_min=60, timestamp is shifted by +3600s."""
-        ts = 1893456000  # 2030-01-01T00:00:00Z
-        reminders_json = self._make_reminders_json(ts)
-        result = calendar_main.task_master_reminders_to_internal_model(
-            'test.md', reminders_json, offset_min=60
+        ics_path = os.path.join(CALENDAR_DIR, 'reminders.ics')
+        self.assertTrue(
+            os.path.exists(ics_path),
+            f'ICS file not found at {ics_path}\nstdout: {result.stdout}\nstderr: {result.stderr}',
         )
-        for uid, r in result.items():
-            self.assertEqual(r['timestamp'], ts + 3600)
+        with open(ics_path) as f:
+            ics_content = f.read()
+        return ics_content
 
-    def test_negative_offset_shifts_timestamp(self):
-        """With offset_min=-120, timestamp is shifted by -7200s."""
-        ts = 1893456000  # 2030-01-01T00:00:00Z
-        reminders_json = self._make_reminders_json(ts)
-        result = calendar_main.task_master_reminders_to_internal_model(
-            'test.md', reminders_json, offset_min=-120
-        )
-        for uid, r in result.items():
-            self.assertEqual(r['timestamp'], ts - 7200)
+    def test_smoke(self):
+        ics_content = self.run_calendar_app()
 
+        self.assertIn('test reminder from subprocess', ics_content)
+        self.assertIn('BEGIN:VCALENDAR', ics_content)
+        self.assertIn('END:VCALENDAR', ics_content)
+        self.assertIn('BEGIN:VEVENT', ics_content)
+        self.assertIn('END:VEVENT', ics_content)
+        # README.md contains 2036.06.06 13:00
+        self.assertIn('DTSTAMP:20360606T130000Z', ics_content)
+        self.assertIn('DTSTART:20360606T130000Z', ics_content)
+
+    def test_timezone_offset(self):
+        self._write_config(config_override={'timezone_offset_min': 60})
+        ics_content = self.run_calendar_app()
+
+        # README.md contains 2026.06.06 12:00
+
+        self.assertIn('test reminder from subprocess', ics_content)
+        self.assertIn('BEGIN:VCALENDAR', ics_content)
+        self.assertIn('END:VCALENDAR', ics_content)
+        self.assertIn('BEGIN:VEVENT', ics_content)
+        self.assertIn('END:VEVENT', ics_content)
+        # README.md contains 2036.06.06 13:00 we shift UTC timestamp by 60 minutes back
+        # so user at GMT+1 would see 2036.06.06 13:00 cause his calendar will add 60 minutes back.
+        self.assertIn('DTSTAMP:20360606T120000Z', ics_content)
+        self.assertIn('DTSTART:20360606T120000Z', ics_content)
 
 if __name__ == '__main__':
     unittest.main()

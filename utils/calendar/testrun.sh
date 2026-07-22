@@ -17,6 +17,7 @@ echo "Building Docker image..."
 docker build -t "$IMAGE_NAME" -f "$CALENDAR_DIR/Dockerfile" "$REPO_ROOT"
 
 echo "Running calendar tests in Docker..."
+set +e
 docker run --rm \
     -v "$CALENDAR_DIR/.test_tmp:/app/utils/calendar/.test_tmp" \
     -v "$CALENDAR_DIR/report.html:/app/utils/calendar/report.html" \
@@ -25,3 +26,8 @@ docker run --rm \
     --entrypoint /app/src/venv/bin/python3.11 \
     "$IMAGE_NAME" \
     -m pytest --html=./report.html --self-contained-html src/test_main.py
+RESULT=$?
+
+echo "Tests completed with result: $RESULT"
+echo "Report is available at: ./report.html"
+exit $RESULT
