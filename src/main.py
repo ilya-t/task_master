@@ -530,6 +530,7 @@ class TaskMaster:
             self._doc.save()
 
     def _execute(self):
+        self._reconcile_spawned_executions()
         self._fix_typos()
         self._doc.format_checkboxes_left_paddings()
         self._untitled_to_tasks()
@@ -1116,25 +1117,28 @@ class TaskMaster:
             else:
                 sed_expr = "sed -E 's/: line ([0-9]+): ([^:]+): command not found/:\\1: command not found: \\2/'"
                 cmd = f"{script_path} 2>&1 | {sed_expr} > {dst}; ret=${{PIPESTATUS[0]}}; echo \"{dst}:$ret\" >> {self._executions_logfile}"
-            subprocess.Popen([self._shell_path, '-c', cmd])
+            # Own process group so orphans can be reaped via killpg if the wrapper disappears.
+            proc = subprocess.Popen([self._shell_path, '-c', cmd], start_new_session=True)
+            self._record_spawned_execution(raw_cmd, proc.pid, dst)
             self._shell_launches.append({
                 'cmd': raw_cmd,
                 'output': dst,
                 'script_path': script_path,
+                'proc': proc,
             })
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
         else:
-            executions = self._get_shell_executions()
             link_abs_path: str = to_abs_path(self._target_file, link)
+            cached_completion: str = self._cached_execution_completions.get(link_abs_path, None)
+            if cached_completion:
+                return link.removesuffix(os.path.basename(link)) + os.path.basename(cached_completion)
+
+            executions = self._get_shell_executions()
             for e in reversed(executions):
                 if e['file'].endswith(link_abs_path):
                     status: str = e['status']
                     if not status.isdigit():
                         continue
-
-                    cached_completion: str = self._cached_execution_completions.get(link_abs_path, None)
-                    if cached_completion:
-                        return link.removesuffix(os.path.basename(link)) + os.path.basename(cached_completion)
 
                     if not os.path.exists(link_abs_path):
                         continue
@@ -1145,6 +1149,95 @@ class TaskMaster:
                     self._cached_execution_completions[link_abs_path] = dst
                     return link.removesuffix(os.path.basename(link)) + os.path.basename(dst)
             return link
+
+    def _spawned_executions_logfile(self) -> str:
+        return os.path.join(os.path.dirname(self._executions_logfile), 'spawned_executions.log')
+
+    def _record_spawned_execution(self, cmd: str, pid: int, dst: str):
+        path = self._spawned_executions_logfile()
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        with open(path, 'a') as f:
+            f.write(json.dumps({'cmd': cmd, 'pid': pid, 'dst': dst}) + '\n')
+
+    @staticmethod
+    def _is_process_alive(pid: int, proc: Optional[subprocess.Popen] = None) -> bool:
+        if proc is not None and proc.poll() is not None:
+            return False
+        try:
+            # Reap our own zombie children so kill(pid, 0) does not keep seeing them.
+            waited_pid, _ = os.waitpid(pid, os.WNOHANG)
+            if waited_pid == pid:
+                return False
+        except (ChildProcessError, OSError):
+            pass
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        # Process table entry may still be a zombie owned by another parent.
+        try:
+            state = subprocess.check_output(
+                ['ps', '-p', str(pid), '-o', 'state='],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            return bool(state) and 'Z' not in state.upper()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    def _has_execution_result(self, dst: str) -> bool:
+        abs_path = to_abs_path(self._target_file, self._executions_logfile)
+        if not os.path.exists(abs_path):
+            return False
+        for e in shell.get_shell_executions(abs_path):
+            if e['file'] == dst or dst.endswith(e['file']) or e['file'].endswith(dst):
+                if e['status'].isdigit():
+                    return True
+        return False
+
+    def _reconcile_spawned_executions(self):
+        path = self._spawned_executions_logfile()
+        if not os.path.exists(path):
+            return
+
+        remaining = []
+        for line in document.read_lines(path):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            pid = entry.get('pid')
+            dst = entry.get('dst')
+            if pid is None or dst is None:
+                continue
+
+            proc = None
+            for sl in self._shell_launches:
+                if sl.get('output') == dst:
+                    proc = sl.get('proc')
+                    break
+
+            if self._is_process_alive(pid, proc=proc):
+                remaining.append(json.dumps(entry))
+                continue
+
+            # Wrapper is gone — reap leftover process-group members (orphaned children).
+            try:
+                os.killpg(pid, 9)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+
+            if not self._has_execution_result(dst):
+                with open(self._executions_logfile, 'a') as f:
+                    f.write(f'{dst}:1\n')
+                self._cached_executions = None
+
+        document.write_lines(path, remaining)
 
     def _get_shell_executions(self) -> [{}]:
         if self._cached_executions:
@@ -1167,6 +1260,7 @@ class TaskMaster:
 
         lines = list(filter(keep_execution, document.read_lines(abs_path)))
         document.write_lines(abs_path, lines)
+        self._cached_executions = None
 
     def _find_dive_in_block(self, topic: {}) -> [str]:
         dive_line = topic['start'] + 1
@@ -1259,6 +1353,7 @@ class TaskMaster:
         print('Blocking until all shell executions are completed!')
 
         def has_running_shells() -> bool:
+            self._reconcile_spawned_executions()
             if not os.path.exists(self._executions_logfile):
                 print(f'executions file yet not present: {self._executions_logfile}')
                 return True
@@ -1270,6 +1365,8 @@ class TaskMaster:
 
             for sl in self._shell_launches:
                 abs_path = sl['output']
+                if self._has_execution_result(abs_path):
+                    continue
 
                 if os.path.exists(abs_path):
                     print(f'file without retcode still exists: {abs_path} (script: {sl["script_path"]}')

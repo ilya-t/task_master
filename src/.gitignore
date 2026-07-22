@@ -1,6 +1,8 @@
 operations.log
 executions.log
-.bashrc
+spawned_executions.log
 venv
 __pycache__
+.bashrc
 .idea
+.venv
