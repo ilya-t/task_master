@@ -20,7 +20,11 @@ fi
 
 if [ "$SKIP_DOCKER_BUILD" != "1" ]; then
     echo "Building Docker image..."
-    docker build -t "$IMAGE_NAME" -f "$CALENDAR_DIR/Dockerfile" "$REPO_ROOT"
+    docker build \
+        --build-arg PRODID_NAME="$(git rev-parse HEAD~0 | tr -d '\n')" \
+        -t "$IMAGE_NAME" \
+        -f "$CALENDAR_DIR/Dockerfile" \
+        "$REPO_ROOT"
 fi
 
 echo "Starting service..."

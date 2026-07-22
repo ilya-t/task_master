@@ -169,10 +169,12 @@ def generate_ics(reminders: dict):
         dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
         return dt.strftime("%Y%m%dT%H%M%S") + 'Z'
 
+    prodid_name = os.environ.get("PRODID_NAME") or "Reminders Agenda"
+
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//TaskMaster//Reminders Agenda//EN"
+        f"PRODID:-//TaskMaster//{prodid_name}//EN"
     ]
 
     for uid, r in reminders.items():
