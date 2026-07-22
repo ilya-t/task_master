@@ -233,9 +233,10 @@ class TestGenerateReminders(unittest.TestCase):
             os.remove(ics_path)
         shutil.rmtree(os.path.join(CALENDAR_DIR, 'repo_storage'), ignore_errors=True)
 
-    def _init_notes_repo_with_reminder(self, content: str = '# Notes\n- [!] 2036.06.06 13:00: test reminder from subprocess\n'):
+    def _init_notes_repo_with_reminder(self):
         """Create a notes repo with a single README.md containing a reminder and a bare clone as local remote."""
         os.makedirs(self.notes_repo, exist_ok=True)
+        content = '# Notes\n- [!] 2036.06.06 13:00: test reminder from subprocess\n- [!] 2036.07.07: no specific date reminder'
         with open(os.path.join(self.notes_repo, 'README.md'), 'w') as f:
             f.write(content)
         _run_git(['init'], self.notes_repo)
@@ -292,6 +293,11 @@ class TestGenerateReminders(unittest.TestCase):
         self.assertIn('DTSTAMP:20360606T130000Z', ics_content)
         self.assertIn('DTSTART:20360606T130000Z', ics_content)
 
+        # README.md contains 2036.07.07 with shift to day end
+        self.assertIn('DTSTAMP:20360707T232959Z', ics_content)
+        self.assertIn('DTSTART:20360707T232959Z', ics_content)
+        self.assertIn('DTEND:20360707T235959Z', ics_content)
+
     def test_timezone_offset(self):
         self._write_config(config_override={'timezone_offset_min': 60})
         ics_content = self.run_calendar_app()
@@ -307,6 +313,12 @@ class TestGenerateReminders(unittest.TestCase):
         # so user at GMT+1 would see 2036.06.06 13:00 cause his calendar will add 60 minutes back.
         self.assertIn('DTSTAMP:20360606T120000Z', ics_content)
         self.assertIn('DTSTART:20360606T120000Z', ics_content)
+
+        # README.md contains 2036.07.07 we shift UTC timestamp by 60 minutes back
+        # so user at GMT+1 would see 2036.06.06 13:00 cause his calendar will add 60 minutes back.
+        self.assertIn('DTSTAMP:20360707T222959Z', ics_content)
+        self.assertIn('DTSTART:20360707T222959Z', ics_content)
+
 
 if __name__ == '__main__':
     unittest.main()
