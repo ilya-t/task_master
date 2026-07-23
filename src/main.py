@@ -1081,6 +1081,11 @@ class TaskMaster:
         # TODO: reduce complexity
         if len(link.strip()) == 0:
             dst = increasing_index_file(get_config_files(self._target_file) + '/cmd.log')
+            # Drop stale exec dirs that still claim this path (e.g. after the log was
+            # moved/deleted while a previous wrapper's bookkeeping remained). Otherwise a
+            # finished neighbor's retcode (often 143 from SIGTERM) can finalize the new file.
+            shell.drop_executions_claiming_path(self._executions_dir, dst)
+            self._cached_executions = None
             document.write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             raw_cmd = title.removeprefix('`').removesuffix('`')
@@ -1122,7 +1127,9 @@ class TaskMaster:
             cmd = f"{script_path} > {dst} 2>&1; echo $? > {result_path}"
             # Own process group so orphans can be reaped via killpg if the wrapper disappears.
             proc = subprocess.Popen([self._shell_path, '-c', cmd], start_new_session=True)
-            self._record_spawned_execution(raw_cmd, proc.pid, dst, exec_dir)
+            shell.record_spawned_execution(
+                self._executions_dir, raw_cmd, proc.pid, dst, exec_dir,
+            )
             self._shell_launches.append({
                 'cmd': raw_cmd,
                 'output': dst,
@@ -1137,6 +1144,13 @@ class TaskMaster:
             if cached_completion:
                 return link.removesuffix(os.path.basename(link)) + os.path.basename(cached_completion)
 
+            # A living spawn still owns this log — do not finalize from a stale neighbor
+            # result (common after relaunch via empty () when await kills the prior pid).
+            if shell.is_dst_spawn_alive(
+                self._executions_dir, link_abs_path, self._shell_launches,
+            ):
+                return link
+
             executions = self._get_shell_executions()
             for e in reversed(executions):
                 if e['file'].endswith(link_abs_path):
@@ -1145,6 +1159,8 @@ class TaskMaster:
                         continue
 
                     if not os.path.exists(link_abs_path):
+                        # Stale bookkeeping: result exists but path was reused/moved.
+                        self._remove_execution_results(e['exec_dir'])
                         continue
 
                     dst: str = shell._get_link_with_retcode(link_abs_path, status)
@@ -1153,48 +1169,6 @@ class TaskMaster:
                     self._cached_execution_completions[link_abs_path] = dst
                     return link.removesuffix(os.path.basename(link)) + os.path.basename(dst)
             return link
-
-    def _spawned_executions_logfile(self) -> str:
-        return os.path.join(self._executions_dir, 'spawned_executions.log')
-
-    def _record_spawned_execution(self, cmd: str, pid: int, dst: str, exec_dir: str):
-        path = self._spawned_executions_logfile()
-        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
-        with open(path, 'a') as f:
-            f.write(json.dumps({
-                'cmd': cmd,
-                'pid': pid,
-                'dst': dst,
-                'exec_dir': exec_dir,
-            }) + '\n')
-
-    @staticmethod
-    def _is_process_alive(pid: int, proc: Optional[subprocess.Popen] = None) -> bool:
-        if proc is not None and proc.poll() is not None:
-            return False
-        try:
-            # Reap our own zombie children so kill(pid, 0) does not keep seeing them.
-            waited_pid, _ = os.waitpid(pid, os.WNOHANG)
-            if waited_pid == pid:
-                return False
-        except (ChildProcessError, OSError):
-            pass
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        # Process table entry may still be a zombie owned by another parent.
-        try:
-            state = subprocess.check_output(
-                ['ps', '-p', str(pid), '-o', 'state='],
-                text=True,
-                stderr=subprocess.DEVNULL,
-            ).strip()
-            return bool(state) and 'Z' not in state.upper()
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return False
 
     def _has_execution_result(self, dst: str) -> bool:
         abs_path = to_abs_path(self._target_file, self._executions_dir)
@@ -1207,7 +1181,7 @@ class TaskMaster:
         return False
 
     def _reconcile_spawned_executions(self):
-        path = self._spawned_executions_logfile()
+        path = shell.spawned_executions_logfile(self._executions_dir)
         if not os.path.exists(path):
             return
 
@@ -1232,7 +1206,7 @@ class TaskMaster:
                     proc = sl.get('proc')
                     break
 
-            if self._is_process_alive(pid, proc=proc):
+            if shell.is_process_alive(pid, proc=proc):
                 remaining.append(json.dumps(entry))
                 continue
 
