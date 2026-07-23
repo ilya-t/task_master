@@ -1112,11 +1112,9 @@ class TaskMaster:
             script_lines.append(raw_cmd)
             document.write_lines(script_path, script_lines)
             os.system('chmod +x '+script_path)
-            if self._shell_path.endswith('zsh'):
-                cmd = f"{script_path} &> {dst}; echo \"{dst}:$?\" >> {self._executions_logfile}"
-            else:
-                sed_expr = "sed -E 's/: line ([0-9]+): ([^:]+): command not found/:\\1: command not found: \\2/'"
-                cmd = f"{script_path} 2>&1 | {sed_expr} > {dst}; ret=${{PIPESTATUS[0]}}; echo \"{dst}:$ret\" >> {self._executions_logfile}"
+            # Direct redirect (no live pipe): piping through sed loses buffered output when
+            # the process group is killed mid-run (pid-loss).
+            cmd = f"{script_path} > {dst} 2>&1; echo \"{dst}:$?\" >> {self._executions_logfile}"
             # Own process group so orphans can be reaped via killpg if the wrapper disappears.
             proc = subprocess.Popen([self._shell_path, '-c', cmd], start_new_session=True)
             self._record_spawned_execution(raw_cmd, proc.pid, dst)
