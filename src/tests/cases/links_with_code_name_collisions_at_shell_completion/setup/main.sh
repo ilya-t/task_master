@@ -1,1 +1,1 @@
-$task_master --executions-log /tmp/executions.log ./main.md
+$task_master --executions-dir /tmp/shell_executions_name_collisions ./main.md

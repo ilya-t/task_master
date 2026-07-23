@@ -1,6 +1,5 @@
 operations.log
-executions.log
-spawned_executions.log
+shell_executions/
 venv
 __pycache__
 .bashrc

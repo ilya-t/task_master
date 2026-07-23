@@ -61,7 +61,7 @@ class TaskMaster:
                  history_file: str,
                  archived_links_processor: str = None,
                  datetime_provider: Callable[[], datetime] = current_datetime,
-                 executions_logfile: str = None,
+                 executions_dir: str = None,
                  memories_dir: str = None,
                  configs_file: str = None,
                  clipboard: Union[ClipboardCompanion, None] = None,
@@ -76,9 +76,9 @@ class TaskMaster:
             self._memories_dir = memories_dir
         else:
             self._memories_dir = HISTORY_DIR + '/' + str(uuid.uuid4())
-        if not executions_logfile:
-            executions_logfile = python_script_path + '/executions.log'
-        self._executions_logfile = executions_logfile
+        if not executions_dir:
+            executions_dir = python_script_path + '/shell_executions'
+        self._executions_dir = executions_dir
         self._cached_executions = None
         self._archived_links_processor = archived_links_processor
         self._shell_launches = []
@@ -1083,10 +1083,14 @@ class TaskMaster:
             dst = increasing_index_file(get_config_files(self._target_file) + '/cmd.log')
             document.write_lines(dst, lines=['<waiting for output>'])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            # TODO: now is a good time to open executions.log
-            # and clean lines that look like /path/to.files/cmd.log:0
             raw_cmd = title.removeprefix('`').removesuffix('`')
-            script_path = self._memories_dir + '/' + os.path.basename(dst) + '.sh'
+
+            os.makedirs(self._executions_dir, exist_ok=True)
+            exec_dir = os.path.join(self._executions_dir, str(uuid.uuid4()))
+            os.makedirs(exec_dir, exist_ok=True)
+            document.write_lines(os.path.join(exec_dir, 'output'), [dst])
+
+            script_path = os.path.join(exec_dir, 'run.sh')
             script_lines = [f'#!{self._shell_path}']
 
             rc_file = None
@@ -1114,14 +1118,16 @@ class TaskMaster:
             os.system('chmod +x '+script_path)
             # Direct redirect (no live pipe): piping through sed loses buffered output when
             # the process group is killed mid-run (pid-loss).
-            cmd = f"{script_path} > {dst} 2>&1; echo \"{dst}:$?\" >> {self._executions_logfile}"
+            result_path = os.path.join(exec_dir, 'execution_result')
+            cmd = f"{script_path} > {dst} 2>&1; echo $? > {result_path}"
             # Own process group so orphans can be reaped via killpg if the wrapper disappears.
             proc = subprocess.Popen([self._shell_path, '-c', cmd], start_new_session=True)
-            self._record_spawned_execution(raw_cmd, proc.pid, dst)
+            self._record_spawned_execution(raw_cmd, proc.pid, dst, exec_dir)
             self._shell_launches.append({
                 'cmd': raw_cmd,
                 'output': dst,
                 'script_path': script_path,
+                'exec_dir': exec_dir,
                 'proc': proc,
             })
             return './' + os.path.basename(os.path.dirname(dst)) + '/' + os.path.basename(dst)
@@ -1143,19 +1149,24 @@ class TaskMaster:
 
                     dst: str = shell._get_link_with_retcode(link_abs_path, status)
                     shutil.move(link_abs_path, dst)
-                    self._remove_execution_results(link)
+                    self._remove_execution_results(e['exec_dir'])
                     self._cached_execution_completions[link_abs_path] = dst
                     return link.removesuffix(os.path.basename(link)) + os.path.basename(dst)
             return link
 
     def _spawned_executions_logfile(self) -> str:
-        return os.path.join(os.path.dirname(self._executions_logfile), 'spawned_executions.log')
+        return os.path.join(self._executions_dir, 'spawned_executions.log')
 
-    def _record_spawned_execution(self, cmd: str, pid: int, dst: str):
+    def _record_spawned_execution(self, cmd: str, pid: int, dst: str, exec_dir: str):
         path = self._spawned_executions_logfile()
         os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
         with open(path, 'a') as f:
-            f.write(json.dumps({'cmd': cmd, 'pid': pid, 'dst': dst}) + '\n')
+            f.write(json.dumps({
+                'cmd': cmd,
+                'pid': pid,
+                'dst': dst,
+                'exec_dir': exec_dir,
+            }) + '\n')
 
     @staticmethod
     def _is_process_alive(pid: int, proc: Optional[subprocess.Popen] = None) -> bool:
@@ -1186,7 +1197,7 @@ class TaskMaster:
             return False
 
     def _has_execution_result(self, dst: str) -> bool:
-        abs_path = to_abs_path(self._target_file, self._executions_logfile)
+        abs_path = to_abs_path(self._target_file, self._executions_dir)
         if not os.path.exists(abs_path):
             return False
         for e in shell.get_shell_executions(abs_path):
@@ -1211,6 +1222,7 @@ class TaskMaster:
 
             pid = entry.get('pid')
             dst = entry.get('dst')
+            exec_dir = entry.get('exec_dir')
             if pid is None or dst is None:
                 continue
 
@@ -1231,8 +1243,9 @@ class TaskMaster:
                 pass
 
             if not self._has_execution_result(dst):
-                with open(self._executions_logfile, 'a') as f:
-                    f.write(f'{dst}:1\n')
+                if exec_dir:
+                    os.makedirs(exec_dir, exist_ok=True)
+                    document.write_lines(os.path.join(exec_dir, 'execution_result'), ['1'])
                 self._cached_executions = None
 
         document.write_lines(path, remaining)
@@ -1240,24 +1253,16 @@ class TaskMaster:
     def _get_shell_executions(self) -> [{}]:
         if self._cached_executions:
             return self._cached_executions
-        abs_path = to_abs_path(self._target_file, self._executions_logfile)
+        abs_path = to_abs_path(self._target_file, self._executions_dir)
         if not os.path.exists(abs_path):
             return []
 
         self._cached_executions = shell.get_shell_executions(abs_path)
         return self._cached_executions
 
-    def _remove_execution_results(self, link: str):
-        abs_path = to_abs_path(self._target_file, self._executions_logfile)
-        if not os.path.exists(abs_path):
-            return
-
-        def keep_execution(s: str) -> bool:
-            is_same = s.split(':')[0].endswith(link.removeprefix('.'))
-            return not is_same
-
-        lines = list(filter(keep_execution, document.read_lines(abs_path)))
-        document.write_lines(abs_path, lines)
+    def _remove_execution_results(self, exec_dir: str):
+        if exec_dir and os.path.isdir(exec_dir):
+            shutil.rmtree(exec_dir)
         self._cached_executions = None
 
     def _find_dive_in_block(self, topic: {}) -> [str]:
@@ -1352,14 +1357,9 @@ class TaskMaster:
 
         def has_running_shells() -> bool:
             self._reconcile_spawned_executions()
-            if not os.path.exists(self._executions_logfile):
-                print(f'executions file yet not present: {self._executions_logfile}')
+            if not os.path.exists(self._executions_dir):
+                print(f'executions dir yet not present: {self._executions_dir}')
                 return True
-            executions = shell.get_shell_executions(self._executions_logfile)
-            for e in executions:
-                if e['status'] == '':
-                    print(f'wait for execution: {e}')
-                    return True
 
             for sl in self._shell_launches:
                 abs_path = sl['output']
@@ -1509,9 +1509,9 @@ def parse_args():
     parser.add_argument('--reminders', action='store_true',
                         help='Print all reminders in JSON format and exit')
     parser.add_argument('task_file', help='Path to file for processing', type=str)
-    parser.add_argument('--executions-log',
-                        metavar='file', type=str, required=False,
-                        help='Path to file where shell executions will be stored',
+    parser.add_argument('--executions-dir',
+                        metavar='dir', type=str, required=False,
+                        help='Directory where per-shell execution state will be stored',
                         )
     parser.add_argument('--memories-dir',
                         metavar='file', type=str, required=False,
@@ -1539,7 +1539,7 @@ def main():
     tm = TaskMaster(taskflow_file=args.task_file,
                     history_file=args.archive,
                     archived_links_processor=args.experimental_archived_links_processor,
-                    executions_logfile=args.executions_log,
+                    executions_dir=args.executions_dir,
                     memories_dir=args.memories_dir,
                     configs_file=args.config,
                     clipboard=build_clipboard_companion(),
