@@ -4,15 +4,37 @@ import document
 from typing import Union
 
 
-def get_shell_executions(executions_path: str) -> [{}]:
-    def parse_line(s: str) -> {}:
-        file_and_status = s.split(':')
-        return {
-            'file': file_and_status[0],
-            'status': file_and_status[1].strip(),
-        }
+def get_shell_executions(executions_dir: str) -> [{}]:
+    if not os.path.isdir(executions_dir):
+        return []
 
-    return list(map(parse_line, document.read_lines(executions_path)))
+    results = []
+    for name in os.listdir(executions_dir):
+        exec_dir = os.path.join(executions_dir, name)
+        if not os.path.isdir(exec_dir):
+            continue
+
+        output_path = os.path.join(exec_dir, 'output')
+        if not os.path.exists(output_path):
+            continue
+
+        output_lines = document.read_lines(output_path)
+        if len(output_lines) == 0:
+            continue
+
+        status = ''
+        result_path = os.path.join(exec_dir, 'execution_result')
+        if os.path.exists(result_path):
+            result_lines = document.read_lines(result_path)
+            if len(result_lines) > 0:
+                status = result_lines[0].strip()
+
+        results.append({
+            'file': output_lines[0],
+            'status': status,
+            'exec_dir': exec_dir,
+        })
+    return results
 
 
 def capture_output(cmd: str, ignore_errors=False) -> Union[str, None]:

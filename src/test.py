@@ -124,9 +124,6 @@ class TestTaskMaster(unittest.TestCase):
     def _run_testcase(self, case_path: str):
         test_dir = case_path + '/actual'
         prepare_artifact(src=case_path + '/setup', dst=test_dir)
-        test_executions = case_path + '/test_executions.log'
-        prepare_artifact(src=case_path + '/executions.log',
-                         dst=test_executions)
         run_task_master_at(test_dir, self.clipboard)
 
         self.assertEqual(
@@ -136,12 +133,6 @@ class TestTaskMaster(unittest.TestCase):
 
         self.compare_directories(expected_dir=case_path + '/expected',
                                  actual_dir=test_dir)
-
-        if os.path.exists(case_path + '/executions.log'):
-            self.assertEqual(
-                read_file(case_path + '/executions.log'),
-                read_file(test_executions),
-            )
 
 
     def compare_directories(self, expected_dir: str, actual_dir: str, retry_scan: bool = False):

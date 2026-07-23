@@ -1,6 +1,7 @@
 MEM_DIR=/tmp/test_memories/links_with_code_execute_shell
 PID_FILE=/tmp/test_memories/links_with_code_execute_shell/pid_to_kill
 rm -rf $MEM_DIR
+mkdir -p $MEM_DIR
 
 (
     while [ ! -f "$PID_FILE" ]; do
