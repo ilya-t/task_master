@@ -242,14 +242,26 @@ def ensure_repo_cloned(repo_uri: str) -> str:
 
 
 def update_notes_repo(notes_dir: str):
-    """Fetch and hard-reset to upstream. Local clone is a disposable read-only mirror."""
+    """Fetch and hard-reset to origin/main or origin/master."""
     quoted = shlex.quote(notes_dir)
-    capture_output(f'cd {quoted} && git fetch --prune origin')
-    upstream = capture_output(
-        f'cd {quoted} && git rev-parse --abbrev-ref --symbolic-full-name @{{u}}'
-    ).strip()
-    capture_output(f'cd {quoted} && git reset --hard {shlex.quote(upstream)}')
+    
+    # Update
+    capture_output(f'cd {quoted} && git fetch origin')
+    
+    has_main = subprocess.run(
+        f'cd {quoted} && git rev-parse --verify origin/main', 
+        shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    ).returncode == 0
+    
+    upstream = "origin/main" if has_main else "origin/master"
+    quoted_upstream = shlex.quote(upstream)
+
+    # Actual checkout
+    capture_output(f'cd {quoted} && git checkout --force {quoted_upstream}')
+    capture_output(f'cd {quoted} && git reset --hard {quoted_upstream}')
     capture_output(f'cd {quoted} && git clean -fd')
+    current_hash = capture_output(f'cd {quoted} && git rev-parse HEAD').strip()
+    print(f"Updated to {upstream} ({current_hash})")
 
 
 def sync_reminders_once(task_master_dir: str, repo_uri: str, ignore_paths_like: list, offset_min: int = 0) -> str:
