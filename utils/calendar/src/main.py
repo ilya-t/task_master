@@ -335,6 +335,7 @@ def main():
         help="Path to JSON config file containing repo_uri and ignore_paths_like"
     )
 
+    print('Parsing arguments...')
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
