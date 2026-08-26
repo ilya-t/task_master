@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import shutil
@@ -188,6 +189,67 @@ class TestGenerateIcs(unittest.TestCase):
         self.assertIn('DTSTART:20240720T090000Z', content)
 
 
+class TestTaskMasterRemindersToInternalModel(unittest.TestCase):
+    OFFSET_MIN = 180
+    OFFSET_TZ = datetime.timezone(datetime.timedelta(minutes=OFFSET_MIN))
+    NOW = datetime.datetime(2026, 8, 26, 9, 57, tzinfo=OFFSET_TZ)
+    TODAY_END = 1787776199  # 2026-08-26 20:29:59 UTC == 23:29:59 UTC+3
+
+    def _convert(self, reminders, offset_min=None, now=None):
+        return calendar_main.task_master_reminders_to_internal_model(
+            reminders_file='calendar.md',
+            reminders_json={'reminders': reminders},
+            offset_min=self.OFFSET_MIN if offset_min is None else offset_min,
+            now=self.NOW if now is None else now,
+        )
+
+    def _event(self, results):
+        self.assertEqual(len(results), 1)
+        return next(iter(results.values()))
+
+    def test_outdated_all_day_event_moves_to_today(self):
+        """Past date-only reminders are shown at the end of today, with the original date in the title."""
+        ts = int(datetime.datetime(2026, 8, 18, tzinfo=datetime.timezone.utc).timestamp())
+        event = self._event(self._convert([
+            {'title': 'coffee', 'timestamp': str(ts), 'exact_time': False, 'line': 1},
+        ]))
+
+        self.assertEqual(event['title'], '[2026.08.18] coffee')
+        self.assertEqual(event['timestamp'], self.TODAY_END)
+        self.assertFalse(event['add_notification'])
+
+    def test_outdated_exact_time_event_moves_to_today(self):
+        ts = int(datetime.datetime(2026, 8, 25, 10, 0, tzinfo=datetime.timezone.utc).timestamp())
+        event = self._event(self._convert([
+            {'title': 'workout', 'timestamp': str(ts), 'exact_time': True, 'line': 1},
+        ]))
+
+        self.assertEqual(event['title'], '[2026.08.25] workout')
+        self.assertEqual(event['timestamp'], self.TODAY_END)
+        self.assertFalse(event['add_notification'])
+
+    def test_future_all_day_event_stays_on_its_own_day(self):
+        ts = int(datetime.datetime(2026, 9, 1, tzinfo=datetime.timezone.utc).timestamp())
+        event = self._event(self._convert([
+            {'title': 'payday', 'timestamp': str(ts), 'exact_time': False, 'line': 1},
+        ]))
+
+        self.assertEqual(event['title'], 'payday')
+        # 2026-09-01 23:29:59 UTC+3
+        self.assertEqual(event['timestamp'], 1788294599)
+        self.assertTrue(event['add_notification'])
+
+    def test_future_exact_time_event_keeps_shifted_timestamp(self):
+        ts = int(datetime.datetime(2026, 9, 1, 13, 0, tzinfo=datetime.timezone.utc).timestamp())
+        event = self._event(self._convert([
+            {'title': 'meeting', 'timestamp': str(ts), 'exact_time': True, 'line': 1},
+        ]))
+
+        self.assertEqual(event['title'], 'meeting')
+        self.assertEqual(event['timestamp'], ts - self.OFFSET_MIN * 60)
+        self.assertTrue(event['add_notification'])
+
+
 class TestGenerateReminders(unittest.TestCase):
     def setUp(self):
         os.makedirs(TEST_TMP_ROOT, exist_ok=True)
@@ -236,7 +298,12 @@ class TestGenerateReminders(unittest.TestCase):
     def _init_notes_repo_with_reminder(self):
         """Create a notes repo with a single README.md containing a reminder and a bare clone as local remote."""
         os.makedirs(self.notes_repo, exist_ok=True)
-        content = '# Notes\n- [!] 2036.06.06 13:00: test reminder from subprocess\n- [!] 2036.07.07: no specific date reminder'
+        content = (
+            '# Notes\n'
+            '- [!] 2036.06.06 13:00: test reminder from subprocess\n'
+            '- [!] 2036.07.07: no specific date reminder\n'
+            '- [!] 2020.01.01: overdue all-day reminder'
+        )
         with open(os.path.join(self.notes_repo, 'README.md'), 'w') as f:
             f.write(content)
         _run_git(['init'], self.notes_repo)
@@ -318,6 +385,14 @@ class TestGenerateReminders(unittest.TestCase):
         # so user at GMT+1 would see 2036.06.06 13:00 cause his calendar will add 60 minutes back.
         self.assertIn('DTSTAMP:20360707T222959Z', ics_content)
         self.assertIn('DTSTART:20360707T222959Z', ics_content)
+
+    def test_outdated_all_day_event_is_placed_today(self):
+        ics_content = self.run_calendar_app()
+
+        self.assertIn('[2020.01.01] overdue all-day reminder', ics_content)
+        today = datetime.datetime.now(datetime.timezone.utc)
+        self.assertIn(today.strftime('DTSTART:%Y%m%dT232959Z'), ics_content)
+        self.assertIn(today.strftime('DTEND:%Y%m%dT235959Z'), ics_content)
 
 
 if __name__ == '__main__':

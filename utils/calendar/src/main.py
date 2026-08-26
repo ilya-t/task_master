@@ -26,13 +26,22 @@ def prettify_title(raw: str) -> str:
     processed = processed.replace('`', '')
     return processed
 
-def task_master_reminders_to_internal_model(reminders_file: str, reminders_json: {}, offset_min: int = 0) -> {}:
+def task_master_reminders_to_internal_model(
+    reminders_file: str,
+    reminders_json: {},
+    offset_min: int = 0,
+    now: Optional[datetime.datetime] = None,
+) -> {}:
     reminders = reminders_json['reminders']
-    now = datetime.datetime.now()
     filename = os.path.splitext(os.path.basename(reminders_file))[0]
     
     offset_tz = datetime.timezone(datetime.timedelta(minutes=offset_min))
-    now_tz = datetime.datetime.now(offset_tz)
+    if now is None:
+        now_tz = datetime.datetime.now(offset_tz)
+    elif now.tzinfo is None:
+        now_tz = now.replace(tzinfo=offset_tz)
+    else:
+        now_tz = now.astimezone(offset_tz)
     today_start = datetime.datetime(now_tz.year, now_tz.month, now_tz.day)
 
     def _end_of_day_timestamp_for_date(dt: datetime.datetime) -> int:
@@ -53,11 +62,10 @@ def task_master_reminders_to_internal_model(reminders_file: str, reminders_json:
         is_outdated = event_time < today_start.replace(tzinfo=offset_tz).astimezone(datetime.timezone.utc)
 
         if is_outdated:
-            original_date_str = event_time.strftime("%Y.%m.%d")
+            original_date_str = event_time.astimezone(offset_tz).strftime("%Y.%m.%d")
             timestamp = today_end_of_day
             title = f'[{original_date_str}] {title}'
-
-        if not r['exact_time']:
+        elif not r['exact_time']:
             # Shift to end of the event's own day (in offset timezone)
             event_date_in_offset = event_time.astimezone(offset_tz)
             timestamp = _end_of_day_timestamp_for_date(event_date_in_offset)
