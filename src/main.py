@@ -32,6 +32,7 @@ ACTIVE_TASKS_OVERVIEW_TOPIC = '>>> (Active) <<<'
 ACTIVE_TASKS_OVERVIEW = f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}'
 REMINDERS_TOPIC = '>>> (Reminders) <<<'
 WAIT_EXECUTIONS_ENV = 'TASK_MASTER_WAIT_ALL_EXECUTIONS'
+EXECUTION_CONTEXT_ENV = 'TASK_MASTER_CONTEXT'
 ERROR_NOTATION = '(GOT ERRORS AT COMPLETION)'
 REMINDER_TOPIC_PREFIX_MAX_LEN = 50
 
@@ -1125,8 +1126,14 @@ class TaskMaster:
             # the process group is killed mid-run (pid-loss).
             result_path = os.path.join(exec_dir, 'execution_result')
             cmd = f"{script_path} > {dst} 2>&1; echo $? > {result_path}"
+            execution_env = os.environ.copy()
+            execution_env[EXECUTION_CONTEXT_ENV] = f'{os.path.abspath(self._target_file)}:{line_index + 1}'
             # Own process group so orphans can be reaped via killpg if the wrapper disappears.
-            proc = subprocess.Popen([self._shell_path, '-c', cmd], start_new_session=True)
+            proc = subprocess.Popen(
+                [self._shell_path, '-c', cmd],
+                env=execution_env,
+                start_new_session=True,
+            )
             shell.record_spawned_execution(
                 self._executions_dir, raw_cmd, proc.pid, dst, exec_dir,
             )
