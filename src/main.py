@@ -489,7 +489,7 @@ class TaskMaster:
             raw_lines.insert(0, {
                 'title': f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}',
             })
-        raw_lines.extend(self._prepare_reminders_topic_lines(active_reminders))
+        raw_lines = self._prepare_reminders_topic_lines(active_reminders) + raw_lines
 
         lines: [str] = []
         space_after_ongoing = 1 if len(ongoing_tasks) > 0 else 0
