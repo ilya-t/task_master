@@ -489,7 +489,8 @@ class TaskMaster:
             raw_lines.insert(0, {
                 'title': f'# {ACTIVE_TASKS_OVERVIEW_TOPIC}',
             })
-        raw_lines = self._prepare_reminders_topic_lines(active_reminders) + raw_lines
+        reminder_topic_lines: [{}] = self._prepare_reminders_topic_lines(active_reminders)
+        raw_lines = reminder_topic_lines + raw_lines
 
         lines: [str] = []
         space_after_ongoing = 1 if len(ongoing_tasks) > 0 else 0
@@ -509,7 +510,8 @@ class TaskMaster:
                     lines.append(f"{r['indent']}- {r['title']}")
                 else:
                     lines.append(r['title'])
-        self._doc.insert_all(start, lines)
+        self._doc.insert_all(start, lines[len(reminder_topic_lines):])
+        self._doc.insert_all(0, lines[:len(reminder_topic_lines)])
         pass
 
     def _fix_typos(self):
