@@ -6,5 +6,6 @@
 In the result of this test we must see reminders about executed shell commands:
 - [!] [`exit 0`](./main.files/cmd-retcode=0.log)
 - [!] [`exit 1`](./main.files/cmd-retcode=1.log)
+- [!] [`its not a date reminder 19:00`](./main.files/cmd.log)
 - [!] [`sleep 100`](./main.files/cmd.log)
 - [ ] 

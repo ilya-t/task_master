@@ -611,28 +611,28 @@ def filter_tasks_tree(tasks: [], status: str) -> []:
 
 
 def format_reminder_date(line: str, now: datetime) -> Optional[str]:
-    content = line.split(': ', 1)[0]
+    content = get_line_title(line).split(': ', 1)[0]
 
     # Already formatted full date+time
-    if re.search(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content):
+    if re.match(r'\b\d{4}\.\d{2}\.\d{2}\s\d{2}:\d{2}\b', content):
         return None
 
     # Relative: +Nm
-    rel_min_match = re.search(r'\+(\d+)m\b', content)
+    rel_min_match = re.match(r'\+(\d+)m\b', content)
     if rel_min_match:
         delta = timedelta(minutes=int(rel_min_match.group(1)))
         dt = now + delta
         return line.replace(rel_min_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
 
     # Relative: +Nh
-    rel_hr_match = re.search(r'\+(\d+)h\b', content)
+    rel_hr_match = re.match(r'\+(\d+)h\b', content)
     if rel_hr_match:
         delta = timedelta(hours=int(rel_hr_match.group(1)))
         dt = now + delta
         return line.replace(rel_hr_match.group(0), dt.strftime('%Y.%m.%d %H:%M'), 1)
 
     # Relative: +N (shorthand for +Nm)
-    rel_min_short_match = re.search(r'\+(\d+)\b', content)
+    rel_min_short_match = re.match(r'\+(\d+)\b', content)
     if rel_min_short_match:
         delta = timedelta(minutes=int(rel_min_short_match.group(1)))
         dt = now + delta
@@ -640,7 +640,7 @@ def format_reminder_date(line: str, now: datetime) -> Optional[str]:
 
     # Weekday: MON..SUN (next matching weekday)
     weekday_names = {'MON': 0, 'TUE': 1, 'WED': 2, 'THU': 3, 'FRI': 4, 'SAT': 5, 'SUN': 6}
-    weekday_match = re.search(r'\b(MON|TUE|WED|THU|FRI|SAT|SUN)\b', content, re.IGNORECASE)
+    weekday_match = re.match(r'\b(MON|TUE|WED|THU|FRI|SAT|SUN)\b', content, re.IGNORECASE)
     if weekday_match:
         target_weekday = weekday_names[weekday_match.group(1).upper()]
         days_ahead = (target_weekday - now.weekday() + 7) % 7
@@ -650,7 +650,7 @@ def format_reminder_date(line: str, now: datetime) -> Optional[str]:
         return line.replace(weekday_match.group(0), dt.strftime('%Y.%m.%d'), 1)
 
     # Time only: HH:mm
-    time_only_match = re.search(r'\b\d{2}:\d{2}\b', content)
+    time_only_match = re.match(r'\b\d{2}:\d{2}\b', content)
     if time_only_match:
         date_str = f"{now.strftime('%Y.%m.%d')} {time_only_match.group()}"
         return line.replace(time_only_match.group(), date_str, 1)
