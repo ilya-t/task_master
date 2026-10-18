@@ -1274,8 +1274,11 @@ class TaskMaster:
         if os.path.exists(candidate):
             return candidate
 
-        for root, dirs, files in os.walk(doc_dir):
-            for f in files:
+        # Breadth-first: the shallowest match wins; hidden dirs (.git, .claude worktrees, ...) are skipped
+        for root, dirs, files in sorted(os.walk(doc_dir), key=lambda w: (w[0].count(os.sep), w[0])):
+            if any(part.startswith('.') for part in os.path.relpath(root, doc_dir).split(os.sep) if part != '.'):
+                continue
+            for f in sorted(files):
                 if f.lower() == name.lower():
                     return root + '/' + f
         return candidate
