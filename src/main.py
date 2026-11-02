@@ -1126,8 +1126,7 @@ class TaskMaster:
             os.system('chmod +x '+script_path)
             # Direct redirect (no live pipe): piping through sed loses buffered output when
             # the process group is killed mid-run (pid-loss).
-            result_path = os.path.join(exec_dir, 'execution_result')
-            cmd = f"{script_path} > {dst} 2>&1; echo $? > {result_path}"
+            cmd = shell.build_execution_command(exec_dir, dst)
             execution_env = os.environ.copy()
             execution_env[EXECUTION_CONTEXT_ENV] = f'{os.path.abspath(self._target_file)}:{line_index + 1}'
             # Own process group so orphans can be reaped via killpg if the wrapper disappears.
@@ -1215,15 +1214,16 @@ class TaskMaster:
                     proc = sl.get('proc')
                     break
 
-            if shell.is_process_alive(pid, proc=proc):
+            if shell.is_spawned_execution_alive(entry, proc=proc):
                 remaining.append(json.dumps(entry))
                 continue
 
-            # Wrapper is gone — reap leftover process-group members (orphaned children).
-            try:
-                os.killpg(pid, 9)
-            except (ProcessLookupError, PermissionError, OSError):
-                pass
+            # Only reap an absent wrapper's orphans; a reused PID belongs to someone else.
+            if not shell.is_process_alive(pid):
+                try:
+                    os.killpg(pid, 9)
+                except (ProcessLookupError, PermissionError, OSError):
+                    pass
 
             if not self._has_execution_result(dst):
                 if exec_dir:

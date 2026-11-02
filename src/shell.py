@@ -75,6 +75,12 @@ def spawned_executions_logfile(executions_dir: str) -> str:
     return os.path.join(executions_dir, 'spawned_executions.log')
 
 
+def build_execution_command(exec_dir: str, dst: str) -> str:
+    script_path = os.path.join(exec_dir, 'run.sh')
+    result_path = os.path.join(exec_dir, 'execution_result')
+    return f'{script_path} > {dst} 2>&1; echo $? > {result_path}'
+
+
 def record_spawned_execution(
     executions_dir: str,
     cmd: str,
@@ -138,6 +144,36 @@ def is_process_alive(pid: int, proc: Optional[subprocess.Popen] = None) -> bool:
         return False
 
 
+def is_spawned_execution_alive(entry: dict, proc: Optional[subprocess.Popen] = None) -> bool:
+    pid = entry.get('pid')
+    if pid is None:
+        return False
+    if proc is not None:
+        return proc.pid == pid and proc.poll() is None
+    if not is_process_alive(pid):
+        return False
+
+    exec_dir = entry.get('exec_dir')
+    dst = entry.get('dst')
+    if not exec_dir or not dst:
+        return False
+
+    try:
+        process_command = subprocess.check_output(
+            ['ps', '-ww', '-p', str(pid), '-o', 'command='],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, PermissionError):
+        return False
+
+    # The recorded PID belongs to the shell wrapper, not to the command in run.sh.
+    executable, separator, command = process_command.partition(' -c ')
+    if not separator or os.path.basename(executable) not in ('sh', 'bash', 'zsh'):
+        return False
+    return command == build_execution_command(exec_dir, dst)
+
+
 def is_dst_spawn_alive(
     executions_dir: str,
     dst: str,
@@ -147,15 +183,12 @@ def is_dst_spawn_alive(
     for entry in iter_spawned_execution_entries(executions_dir):
         if entry.get('dst') != dst:
             continue
-        pid = entry.get('pid')
-        if pid is None:
-            continue
         proc = None
         for sl in shell_launches:
             if sl.get('output') == dst:
                 proc = sl.get('proc')
                 break
-        if is_process_alive(pid, proc=proc):
+        if is_spawned_execution_alive(entry, proc=proc):
             return True
     return False
 
@@ -169,10 +202,7 @@ def drop_executions_claiming_path(executions_dir: str, dst: str) -> list:
     for entry in iter_spawned_execution_entries(executions_dir):
         if entry.get('dst') != dst:
             continue
-        pid = entry.get('pid')
-        if pid is None:
-            continue
-        if is_process_alive(pid):
+        if is_spawned_execution_alive(entry):
             living_dirs.add(entry.get('exec_dir'))
 
     # Uncached read: callers often invoke this before creating a new exec_dir.

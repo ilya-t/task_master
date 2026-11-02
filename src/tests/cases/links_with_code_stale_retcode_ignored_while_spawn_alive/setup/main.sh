@@ -1,36 +1,67 @@
-MEM_DIR=/tmp/test_memories/links_with_code_stale_retcode_ignored_while_spawn_alive
-EXEC_DIR=$MEM_DIR/executions
-rm -rf $MEM_DIR
-mkdir -p $EXEC_DIR main.files
+set -eu
 
+# Arrange: a real living wrapper and a stale neighbor claim the same output.
+MEM_DIR=$(mktemp -d "${TMPDIR:-/tmp}/task-master-living-spawn.XXXXXX")
+LIVE_PID=
+
+cleanup() {
+    if [ -n "$LIVE_PID" ]; then
+        kill -KILL "$LIVE_PID" 2>/dev/null || true
+        kill -KILL "-$LIVE_PID" 2>/dev/null || true
+        wait "$LIVE_PID" 2>/dev/null || true
+    fi
+    rm -rf "$MEM_DIR"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+EXEC_DIR="$MEM_DIR/executions"
 CMD_LOG="$(pwd)/main.files/cmd.log"
-echo stale-retcode-guard > "$CMD_LOG"
+mkdir -p "$EXEC_DIR/living" main.files
+printf '%s\n' "$CMD_LOG" > "$EXEC_DIR/living/output"
+cat > "$EXEC_DIR/living/run.sh" <<'SH'
+#!/bin/sh
+echo stale-retcode-guard
+exec sleep 600
+SH
+chmod +x "$EXEC_DIR/living/run.sh"
 
-# Living wrapper pid recorded in spawned_executions.log (stand-in for an in-flight shell).
-sleep 60 &
+WRAPPER_COMMAND="$EXEC_DIR/living/run.sh > $CMD_LOG 2>&1; echo \$? > $EXEC_DIR/living/execution_result"
+python3 -c 'import os, sys; os.setsid(); os.execv("/bin/sh", ["/bin/sh", "-c", sys.argv[1]])' "$WRAPPER_COMMAND" > /dev/null 2>&1 &
 LIVE_PID=$!
 
-cat > "$EXEC_DIR/spawned_executions.log" <<EOF
-{"cmd": "echo stale-retcode-guard", "pid": $LIVE_PID, "dst": "$CMD_LOG", "exec_dir": "$EXEC_DIR/living"}
-EOF
-mkdir -p "$EXEC_DIR/living"
-echo "$CMD_LOG" > "$EXEC_DIR/living/output"
+python3 - "$LIVE_PID" "$CMD_LOG" "$EXEC_DIR/living" > "$EXEC_DIR/spawned_executions.log" <<'PY'
+import json
+from pathlib import Path
+import sys
+import time
 
-# Finished neighbor that claims the same output path with SIGTERM-style 143.
+output = Path(sys.argv[2])
+deadline = time.monotonic() + 5
+while not output.exists() or output.read_text() != 'stale-retcode-guard\n':
+    if time.monotonic() >= deadline:
+        raise TimeoutError('The shell wrapper did not write its output')
+    time.sleep(0.01)
+
+print(json.dumps({
+    'cmd': 'echo stale-retcode-guard',
+    'pid': int(sys.argv[1]),
+    'dst': sys.argv[2],
+    'exec_dir': sys.argv[3],
+}))
+PY
+
 mkdir -p "$EXEC_DIR/stale-neighbor"
-echo "$CMD_LOG" > "$EXEC_DIR/stale-neighbor/output"
-echo 143 > "$EXEC_DIR/stale-neighbor/execution_result"
+printf '%s\n' "$CMD_LOG" > "$EXEC_DIR/stale-neighbor/output"
+printf '143\n' > "$EXEC_DIR/stale-neighbor/execution_result"
 
-$task_master --memories-dir $MEM_DIR --executions-dir $EXEC_DIR ./main.md
-STATUS=$?
+# Act: restore the living execution through a fresh CLI process.
+$task_master --memories-dir "$MEM_DIR" --executions-dir "$EXEC_DIR" ./main.md
 
-kill $LIVE_PID 2>/dev/null || true
-wait $LIVE_PID 2>/dev/null || true
-
-if [ $STATUS -ne 0 ]; then
-    exit $STATUS
-fi
-
+# Assert: the living wrapper still owns the log despite the stale result.
+kill -0 "$LIVE_PID"
 if grep -q 'retcode=' main.md; then
     echo "stale retcode finalized a living spawn:"
     cat main.md
