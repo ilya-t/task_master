@@ -1,0 +1,12 @@
+**/*
+!package.json
+!README.md
+!out/extension.js
+!out/task_master_companion.js
+!out/cursor_preserver.js
+!out/position_mapper.js
+!out/companion_configuration.js
+!node_modules/diff/package.json
+!node_modules/diff/LICENSE
+!node_modules/diff/libcjs/**/*.js
+!node_modules/diff/libcjs/package.json

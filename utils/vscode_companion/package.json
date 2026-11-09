@@ -1,0 +1,117 @@
+{
+  "name": "task-master-companion",
+  "displayName": "Task Master Companion",
+  "description": "Run Task Master for configured files and preserve cursors on external updates.",
+  "version": "0.1.0",
+  "publisher": "ilya-t",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ilya-t/task_master.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Task Master executes local commands when configured files are saved."
+    },
+    "virtualWorkspaces": false
+  },
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "vscode:prepublish": "npm run compile",
+    "test": "npm run compile && node --test test/*.test.cjs",
+    "package": "vsce package --skip-license --out build_artifacts/task-master-companion.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "^4.0.0",
+    "mock-require": "3.0.3",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "diff": "9.0.0"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Task Master Companion",
+      "properties": {
+        "taskMasterCompanion.profiles": {
+          "type": "object",
+          "default": {},
+          "scope": "resource",
+          "markdownDescription": "Profiles keyed by name. The first matching profile in the final VS Code object enumeration wins. Paths support `~/` and `${workspaceFolder}`. Relative paths use the document workspace folder, or its directory outside a workspace.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "executable",
+              "files"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "executable": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "Task Master executable: a command on PATH or a path."
+              },
+              "files": {
+                "type": "string",
+                "pattern": "\\S",
+                "description": "A single file path or glob."
+              },
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "archive": {
+                    "type": "string",
+                    "description": "Path; an empty string omits this argument."
+                  },
+                  "config": {
+                    "type": "string",
+                    "description": "Path; an empty string omits this argument."
+                  },
+                  "executions-dir": {
+                    "type": "string",
+                    "description": "Path; an empty string omits this argument."
+                  },
+                  "memories-dir": {
+                    "type": "string",
+                    "description": "Path; an empty string omits this argument."
+                  },
+                  "experimental-archived-links-processor": {
+                    "type": "string",
+                    "description": "Processor command passed literally; an empty string omits this argument."
+                  },
+                  "reminders": {
+                    "type": "boolean",
+                    "description": "Emit --reminders when true."
+                  }
+                }
+              },
+              "verbose": {
+                "type": "boolean",
+                "default": false,
+                "description": "Show Task Master Companion output on every invocation, preserving editor focus."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

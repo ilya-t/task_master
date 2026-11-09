@@ -6,6 +6,31 @@ on:
   pull_request:
 
 jobs:
+  vscode-companion:
+    name: Build VS Code Companion
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: utils/vscode_companion/package-lock.json
+
+      - name: Build, test and package extension
+        run: ./utils/vscode_companion/build_extension.sh
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-master-companion-vsix
+          path: utils/vscode_companion/build_artifacts/task-master-companion.vsix
+          if-no-files-found: error
+
   tests:
     runs-on: ubuntu-latest
     steps:
